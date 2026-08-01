@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>House Hunter — Preferences</title>
+  <style>
+    body { font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+    h1 { font-size: 1.5rem; }
+    h2 { font-size: 1.1rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+    label { display: block; font-size: 0.85rem; color: #444; margin-top: 12px; margin-bottom: 4px; }
+    input[type=text], input[type=number], select, textarea {
+      width: 100%; padding: 8px; box-sizing: border-box; font-size: 0.95rem;
+      border: 1px solid #ccc; border-radius: 4px;
+    }
+    .row { display: flex; gap: 16px; }
+    .row > div { flex: 1; }
+    .poi-row { display: grid; grid-template-columns: 2fr 2fr 1fr 1fr auto; gap: 8px; align-items: end; margin-top: 8px; }
+    .poi-row label { margin-top: 0; }
+    button, .btn { margin-top: 16px; padding: 8px 16px; font-size: 0.95rem; border-radius: 4px; border: 1px solid #333; background: #1a1a1a; color: white; cursor: pointer; }
+    .btn-secondary { background: white; color: #1a1a1a; }
+    .btn-remove { background: white; color: #a00; border-color: #a00; padding: 8px 10px; margin-top: 0; }
+    .saved { color: #146c2e; font-size: 0.9rem; }
+    .errors { background: #fdecea; border: 1px solid #f5c2c0; color: #a00; padding: 12px; border-radius: 4px; margin-top: 16px; }
+    .hint { font-size: 0.8rem; color: #777; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <h1>House Hunter — Search Preferences</h1>
+  <p class="hint">Edits here are saved to <code>config.json</code> and picked up by the next scheduled search run.</p>
+
+  {% if last_saved %}
+    <p class="saved">Last saved: {{ last_saved }}</p>
+  {% endif %}
+
+  {% if errors %}
+    <div class="errors">
+      <strong>Please fix the following:</strong>
+      <ul>
+        {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('save') }}">
+    <h2>Search</h2>
+    <label for="location">Location (city, postcode, or region)</label>
+    <input type="text" id="location" name="location" value="{{ config.search.location or '' }}" required>
+
+    <div class="row">
+      <div>
+        <label for="category">Category</label>
+        <select id="category" name="category">
+          {% for option in category_options %}
+            <option value="{{ option }}" {% if config.search.category == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="radius_km">Search radius (km, optional)</label>
+        <input type="number" id="radius_km" name="radius_km" value="{{ config.search.radius_km if config.search.radius_km is not none else '' }}">
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="min_price">Min price (€)</label>
+        <input type="number" id="min_price" name="min_price" value="{{ config.search.min_price if config.search.min_price is not none else '' }}">
+      </div>
+      <div>
+        <label for="max_price">Max price (€)</label>
+        <input type="number" id="max_price" name="max_price" value="{{ config.search.max_price if config.search.max_price is not none else '' }}">
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="min_bedrooms">Min bedrooms</label>
+        <input type="number" id="min_bedrooms" name="min_bedrooms" value="{{ config.search.min_bedrooms if config.search.min_bedrooms is not none else '' }}">
+      </div>
+      <div>
+        <label for="max_bedrooms">Max bedrooms</label>
+        <input type="number" id="max_bedrooms" name="max_bedrooms" value="{{ config.search.max_bedrooms if config.search.max_bedrooms is not none else '' }}">
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="min_area">Min living area (m²)</label>
+        <input type="number" id="min_area" name="min_area" value="{{ config.search.min_area if config.search.min_area is not none else '' }}">
+      </div>
+      <div>
+        <label for="max_area">Max living area (m²)</label>
+        <input type="number" id="max_area" name="max_area" value="{{ config.search.max_area if config.search.max_area is not none else '' }}">
+      </div>
+    </div>
+
+    <h2>Nearby places to check</h2>
+    <div id="poi-rows">
+      {% for poi in config.poi.types %}
+        <div class="poi-row">
+          <div>
+            <label>Name</label>
+            <input type="text" name="poi_key" value="{{ poi.key }}" placeholder="e.g. school">
+          </div>
+          <div>
+            <label>Google Place type</label>
+            <input type="text" name="poi_google_place_type" value="{{ poi.google_place_type }}" placeholder="e.g. school">
+          </div>
+          <div>
+            <label>Max results</label>
+            <input type="number" name="poi_max_results" value="{{ poi.max_results }}">
+          </div>
+          <div>
+            <label>Max radius (m)</label>
+            <input type="number" name="poi_max_radius_m" value="{{ poi.max_radius_m }}">
+          </div>
+          <button type="button" class="btn-remove" onclick="this.parentElement.remove()">Remove</button>
+        </div>
+      {% endfor %}
+    </div>
+    <button type="button" class="btn btn-secondary" onclick="addPoiRow()">+ Add place type</button>
+
+    <h2>Email</h2>
+    <label for="to_addresses">Recipients (one email per line)</label>
+    <textarea id="to_addresses" name="to_addresses" rows="3">{{ config.email.to_addresses|join('\n') }}</textarea>
+
+    <h2>Schedule</h2>
+    <label for="frequency">How often to check for new listings</label>
+    <select id="frequency" name="frequency">
+      {% for option in frequency_options %}
+        <option value="{{ option }}" {% if config.schedule.frequency == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+
+    <br>
+    <button type="submit">Save preferences</button>
+  </form>
+
+  <script>
+    function addPoiRow() {
+      const container = document.getElementById('poi-rows');
+      const row = document.createElement('div');
+      row.className = 'poi-row';
+      row.innerHTML = `
+        <div><label>Name</label><input type="text" name="poi_key" placeholder="e.g. supermarket"></div>
+        <div><label>Google Place type</label><input type="text" name="poi_google_place_type" placeholder="e.g. supermarket"></div>
+        <div><label>Max results</label><input type="number" name="poi_max_results" value="3"></div>
+        <div><label>Max radius (m)</label><input type="number" name="poi_max_radius_m" value="2000"></div>
+        <button type="button" class="btn-remove" onclick="this.parentElement.remove()">Remove</button>
+      `;
+      container.appendChild(row);
+    }
+  </script>
+</body>
+</html>
