@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Schools — House Hunter{% endblock %}
+{% block head %}
+<style>
+  .city-group { margin-top: 2rem; }
+  .city-group h2 { margin-top: 0; }
+  .school-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--gray-100); }
+  .school-row:last-child { border-bottom: none; }
+  .school-row .name { font-weight: 600; color: var(--ink); }
+  .school-row .addr { color: var(--gray-500); font-size: 0.82rem; margin-top: 2px; }
+  .school-row .link { flex-shrink: 0; font-size: 0.85rem; font-weight: 700; text-decoration: none; color: var(--red); }
+  .school-row .link:hover { text-decoration: underline; }
+  .no-link { color: var(--gray-500); font-size: 0.85rem; }
+</style>
+{% endblock %}
+{% block content %}
+  <h1>Schools</h1>
+  <p class="hint">Every vrijeschool (Waldorf/Steiner school) from the vrijescholen.nl directory, grouped by city.</p>
+  {% if not grouped %}
+    <div class="card"><p class="hint" style="margin:0;">No schools cached yet.</p></div>
+  {% endif %}
+  {% for city, schools in grouped.items() %}
+    <div class="city-group">
+      <h2>{{ city }}</h2>
+      <div class="card">
+        {% for school in schools %}
+          <div class="school-row">
+            <div>
+              <div class="name">{{ school.title }}</div>
+              {% if school.street %}
+                <div class="addr">{{ school.street }} {{ school.housenumber or '' }}{% if school.postcode %}, {{ school.postcode }}{% endif %}</div>
+              {% endif %}
+            </div>
+            {% set link = school.website or school.permalink %}
+            {% if link %}
+              <a class="link" href="{{ link }}" target="_blank" rel="noopener">Website &#8599;</a>
+            {% else %}
+              <span class="no-link">No website</span>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+{% endblock %}

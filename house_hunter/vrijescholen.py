@@ -18,6 +18,14 @@ _API_URL = "https://cms.vrijescholen.nl/api/collections/schools/entries"
 _REFRESH_INTERVAL = timedelta(days=30)
 
 
+def _migrate_add_website_columns(conn: sqlite3.Connection) -> None:
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(vrijescholen)")}
+    if "website" not in columns:
+        conn.execute("ALTER TABLE vrijescholen ADD COLUMN website TEXT")
+    if "permalink" not in columns:
+        conn.execute("ALTER TABLE vrijescholen ADD COLUMN permalink TEXT")
+
+
 @contextmanager
 def _connect():
     conn = sqlite3.connect(state_path())
@@ -32,11 +40,14 @@ def _connect():
                 housenumber TEXT,
                 postcode TEXT,
                 education_type TEXT,
+                website TEXT,
+                permalink TEXT,
                 lat REAL NOT NULL,
                 lng REAL NOT NULL
             )
             """
         )
+        _migrate_add_website_columns(conn)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS vrijescholen_meta (
@@ -83,6 +94,8 @@ def _fetch_all_from_api() -> list[dict]:
                 "housenumber": entry.get("housenumber"),
                 "postcode": entry.get("postcode"),
                 "education_type": (entry.get("education_type") or {}).get("title"),
+                "website": entry.get("website"),
+                "permalink": entry.get("permalink"),
                 "lat": lat,
                 "lng": lng,
             }
@@ -116,8 +129,8 @@ def refresh_schools(force: bool = False) -> int:
         conn.executemany(
             """
             INSERT INTO vrijescholen
-                (id, title, city, street, housenumber, postcode, education_type, lat, lng)
-            VALUES (:id, :title, :city, :street, :housenumber, :postcode, :education_type, :lat, :lng)
+                (id, title, city, street, housenumber, postcode, education_type, website, permalink, lat, lng)
+            VALUES (:id, :title, :city, :street, :housenumber, :postcode, :education_type, :website, :permalink, :lat, :lng)
             """,
             schools,
         )
@@ -150,3 +163,31 @@ def nearest_vrijeschool(lat: float, lng: float) -> dict | None:
         rows, key=lambda row: _haversine_km(lat, lng, row[3], row[4])
     )
     return {"id": school_id, "title": title, "city": city, "lat": school_lat, "lng": school_lng}
+
+
+def list_all_schools() -> list[dict]:
+    """Every cached vrijeschool, sorted by city then name, for a browsable
+    directory page - not tied to any particular listing.
+    """
+    refresh_schools()  # no-op unless the cached directory is >30 days old
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT title, city, street, housenumber, postcode, education_type, website, permalink
+            FROM vrijescholen
+            ORDER BY city, title
+            """
+        ).fetchall()
+    return [
+        {
+            "title": title,
+            "city": city,
+            "street": street,
+            "housenumber": housenumber,
+            "postcode": postcode,
+            "education_type": education_type,
+            "website": website,
+            "permalink": permalink,
+        }
+        for title, city, street, housenumber, postcode, education_type, website, permalink in rows
+    ]

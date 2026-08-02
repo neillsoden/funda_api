@@ -31,6 +31,7 @@ from house_hunter.state import (  # noqa: E402
     remove_favorite,
     remove_rejected,
 )
+from house_hunter.vrijescholen import list_all_schools  # noqa: E402
 from house_hunter.webapp.auth import (  # noqa: E402
     is_rate_limited,
     login_required,
@@ -326,6 +327,16 @@ def rejected():
                 except FundaError:
                     continue
     return render_template("rejected.html", listings=listings)
+
+
+@app.route("/schools", methods=["GET"])
+@login_required
+def schools():
+    all_schools = list_all_schools()
+    grouped: dict[str, list[dict]] = {}
+    for school in all_schools:
+        grouped.setdefault(school["city"] or "Unknown", []).append(school)
+    return render_template("schools.html", grouped=dict(sorted(grouped.items())))
 
 
 if __name__ == "__main__":
