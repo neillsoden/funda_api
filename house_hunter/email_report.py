@@ -145,6 +145,22 @@ def _distance_chips(distances: dict[str, Distance], origin: tuple[float, float] 
     return "".join(chips)
 
 
+def _split_school_distance(
+    distances: dict[str, Distance],
+) -> tuple[dict[str, Distance], tuple[str, Distance] | None]:
+    """Pulls the vrijeschool entry out of the generic distances dict so it can
+    be shown up front with the other priority facts, instead of mixed in with
+    secondary distances (station, fixed landmarks)."""
+    school_entry = None
+    rest: dict[str, Distance] = {}
+    for name, dist in distances.items():
+        if "(vrijeschool)" in name and school_entry is None:
+            school_entry = (name, dist)
+        else:
+            rest[name] = dist
+    return rest, school_entry
+
+
 def _market_group(item: EnrichedListing) -> str:
     listing = item.listing
     parts = []
@@ -285,10 +301,34 @@ def _row_html(item: EnrichedListing, public_base_url: str = "", people: list[str
     energy_bg = _energy_color(listing.energy_label)
     energy_text = _contrast_text_color(energy_bg)
 
-    specs_chips = _chip(f"{listing.bedrooms} bedrooms", icon="bed") + _chip(
-        energy_label, bg=energy_bg, color=energy_text
-    )
-    distance_chips = _distance_chips(item.distances, listing.location.coordinates)
+    # Priority facts (what matters most): bedrooms + bike time to school,
+    # shown first and bigger than everything else. Secondary distances
+    # (station, fixed landmarks) are split out and shown further down.
+    other_distances, school_entry = _split_school_distance(item.distances)
+
+    key_chips = _chip(f"{listing.bedrooms} bedrooms", icon="bed")
+    if school_entry:
+        school_name, school_dist = school_entry
+        school_href = _maps_directions_url(listing.location.coordinates, school_dist)
+        school_label = (
+            f"{school_dist.km:.1f} km ({school_dist.duration_text}) to school"
+            if school_dist.duration_text
+            else f"{school_dist.km:.1f} km to school"
+        )
+        key_chips += _chip(school_label, icon="bike", bg="#e6f4ea", color="#146c2e", href=school_href)
+    key_chips += _chip(energy_label, bg=energy_bg, color=energy_text)
+
+    within_range_badge = ""
+    if item.school_distance_km is not None and item.max_school_distance_km is not None:
+        within_range = item.school_distance_km <= item.max_school_distance_km
+        within_range_badge = _chip(
+            f"{'Within' if within_range else 'Outside'} {item.max_school_distance_km:g}km biking distance",
+            icon="check" if within_range else None,
+            bg="#e6f4ea" if within_range else "#fce8e6",
+            color="#146c2e" if within_range else "#c5221f",
+        )
+
+    distance_chips = _distance_chips(other_distances, listing.location.coordinates)
     meta_chips = _chip(listed_text, icon="schedule") + _chip(sold_text, icon="sell")
 
     budget_chip = ""
@@ -310,7 +350,8 @@ def _row_html(item: EnrichedListing, public_base_url: str = "", people: list[str
         )
 
     groups = (
-        f'<div>{specs_chips}</div>'
+        f'<div>{key_chips}</div>'
+        + (f'<div style="margin-top:6px;">{within_range_badge}</div>' if within_range_badge else '')
         + _group(distance_chips)
         + _group(meta_chips)
         + _group(budget_chip)
@@ -318,26 +359,6 @@ def _row_html(item: EnrichedListing, public_base_url: str = "", people: list[str
     )
 
     accent_color = _school_proximity_color(item.school_distance_km, item.max_school_distance_km)
-    school_note = ""
-    if item.school_distance_km is not None:
-        within_range = (
-            item.max_school_distance_km is None
-            or item.school_distance_km <= item.max_school_distance_km
-        )
-        if within_range:
-            badge = _chip(
-                f"Within {item.max_school_distance_km:g}km biking distance", icon="check",
-                bg="#e6f4ea", color="#146c2e",
-            ) if item.max_school_distance_km is not None else ""
-        else:
-            badge = _chip(
-                f"Outside {item.max_school_distance_km:g}km biking distance", bg="#fce8e6", color="#c5221f",
-            )
-        school_note = (
-            f'<div style="font-size:11px;color:#5f6368;margin-top:10px;">'
-            f"{_icon('place', 11)}{item.school_distance_km:.1f} km to nearest vrijeschool</div>"
-            f'<div style="margin-top:6px;">{badge}</div>'
-        )
 
     border_style = (
         f"border-top:1px solid #eceff1;border-right:1px solid #eceff1;"
@@ -369,7 +390,6 @@ def _row_html(item: EnrichedListing, public_base_url: str = "", people: list[str
             {f'<span style="color:#5f6368;font-size:13px;margin-left:8px;">{area_text}</span>' if area_text else ''}
           </div>
           {groups}
-          {school_note}
         </td>
       </tr>
     </table>
