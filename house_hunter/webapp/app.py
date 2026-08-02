@@ -13,9 +13,16 @@ from flask import Flask, abort, redirect, render_template, request, url_for
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
+from funda import Funda, FundaError  # noqa: E402
+
 from house_hunter.config import load_config, save_config  # noqa: E402
 from house_hunter.poi import geocode_address  # noqa: E402
-from house_hunter.state import record_click  # noqa: E402
+from house_hunter.state import (  # noqa: E402
+    add_favorite,
+    favorited_listing_ids,
+    record_click,
+    remove_favorite,
+)
 
 _ALLOWED_REDIRECT_HOSTS = {"www.funda.nl", "funda.nl"}
 
@@ -164,6 +171,7 @@ def save():
 def click(listing_id: str):
     """Logs a click on a listing link, then redirects to the real Funda page.
     Only redirects to funda.nl hosts, to avoid this becoming an open redirect.
+    Also marks the listing as favorited if ?favorite=1 is present.
     """
     target = request.args.get("to", "")
     host = urlparse(target).hostname
@@ -171,7 +179,47 @@ def click(listing_id: str):
         abort(400)
 
     record_click(listing_id)
+    if request.args.get("favorite") == "1":
+        add_favorite(listing_id)
     return redirect(target, code=302)
+
+
+_CONFIRM_PAGE = """
+<!doctype html>
+<html><head><meta charset="utf-8"><title>House Hunter</title>
+<style>body{{font-family:-apple-system,Arial,sans-serif;max-width:480px;margin:80px auto;text-align:center;color:#202124;}}
+a{{color:#1967d2;}}</style></head>
+<body><h2>{message}</h2><p><a href="{back_url}">&larr; Back to listing</a> &middot; <a href="/favorites">View all favorites</a></p></body></html>
+"""
+
+
+@app.route("/favorite/<listing_id>", methods=["GET"])
+def favorite(listing_id: str):
+    """Marks a listing favorited without redirecting away (idempotent GET, safe
+    against email security scanners pre-fetching the link)."""
+    add_favorite(listing_id)
+    back_url = request.args.get("to", "/favorites")
+    return _CONFIRM_PAGE.format(message="Added to favorites", back_url=back_url)
+
+
+@app.route("/unfavorite/<listing_id>", methods=["GET"])
+def unfavorite(listing_id: str):
+    remove_favorite(listing_id)
+    return redirect(url_for("favorites"))
+
+
+@app.route("/favorites", methods=["GET"])
+def favorites():
+    ids = sorted(favorited_listing_ids())
+    listings = []
+    if ids:
+        with Funda() as client:
+            for listing_id in ids:
+                try:
+                    listings.append(client.listing(listing_id))
+                except FundaError:
+                    continue
+    return render_template("favorites.html", listings=listings)
 
 
 if __name__ == "__main__":

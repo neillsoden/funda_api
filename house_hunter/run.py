@@ -18,7 +18,13 @@ from house_hunter.market import get_market_insights  # noqa: E402
 from house_hunter.poi import distance_to, nearest_place  # noqa: E402
 from house_hunter.pricing import previous_sale  # noqa: E402
 from house_hunter.search import budget_for_label, find_matching_listings  # noqa: E402
-from house_hunter.state import classify_listings, clicked_listing_ids, last_notified_price, record_notified  # noqa: E402
+from house_hunter.state import (  # noqa: E402
+    classify_listings,
+    clicked_listing_ids,
+    favorited_listing_ids,
+    last_notified_price,
+    record_notified,
+)
 from house_hunter.vrijescholen import nearest_vrijeschool  # noqa: E402
 
 
@@ -43,6 +49,7 @@ def run() -> None:
         nearest_types = config["poi"].get("nearest_types", [])
         mortgage_budget = config["search"].get("mortgage_budget") or {}
         viewed_ids = clicked_listing_ids([listing.id for listing in notify_listings if listing.id])
+        favorite_ids = favorited_listing_ids([listing.id for listing in notify_listings if listing.id])
         enriched: list[EnrichedListing] = []
         for listing in notify_listings:
             coords = listing.location.coordinates
@@ -91,6 +98,7 @@ def run() -> None:
                     max_school_distance_km=config["search"].get("max_school_distance_km"),
                     already_viewed=listing.id in viewed_ids,
                     is_new=events.get(listing.id) == "new",
+                    is_favorited=listing.id in favorite_ids,
                 )
             )
 

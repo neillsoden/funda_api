@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>House Hunter — Favorites</title>
+  <style>
+    body { font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+    h1 { font-size: 1.5rem; }
+    .empty { color: #777; }
+    .card { display: flex; gap: 14px; border: 1px solid #eee; border-radius: 10px; padding: 12px; margin-bottom: 12px; align-items: center; }
+    .card img { width: 110px; height: 80px; object-fit: cover; border-radius: 6px; background: #f1f3f4; flex-shrink: 0; }
+    .card .info { flex: 1; }
+    .card .title { font-weight: 700; text-decoration: none; color: #202124; font-size: 1rem; }
+    .card .meta { color: #5f6368; font-size: 0.85rem; margin-top: 4px; }
+    .card .price { color: #1967d2; font-weight: 700; margin-top: 4px; }
+    .unfav { color: #a00; font-size: 0.85rem; text-decoration: none; white-space: nowrap; }
+    a.back { display: inline-block; margin-top: 20px; color: #1967d2; }
+  </style>
+</head>
+<body>
+  <h1>Favorites</h1>
+  {% if not listings %}
+    <p class="empty">No favorites yet. Tap "Favorite" on a listing in an email to add one.</p>
+  {% endif %}
+  {% for l in listings %}
+    <div class="card">
+      <img src="{{ l.media.photo_urls[0] if l.media.photo_urls else '' }}">
+      <div class="info">
+        <a class="title" href="{{ l.url }}">{{ l.title }}</a>
+        <div class="meta">{{ l.city }}{% if l.bedrooms %} &middot; {{ l.bedrooms }} bedrooms{% endif %}</div>
+        <div class="price">{% if l.price.amount %}€{{ '{:,}'.format(l.price.amount) }}{% endif %}</div>
+      </div>
+      <a class="unfav" href="/unfavorite/{{ l.id }}">Remove</a>
+    </div>
+  {% endfor %}
+  <a class="back" href="/">&larr; Back to preferences</a>
+</body>
+</html>

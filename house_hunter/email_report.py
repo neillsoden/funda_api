@@ -28,6 +28,7 @@ class EnrichedListing:
     max_school_distance_km: float | None = None  # configured biking-distance threshold
     already_viewed: bool = False  # link was clicked in a previous email
     is_new: bool = True  # first time this listing has ever been emailed
+    is_favorited: bool = False  # already marked favorite via a previous email
 
 
 def _days_listed(listing: Listing) -> tuple[str, int] | tuple[None, None]:
@@ -84,6 +85,8 @@ _ICONS = {
     "schedule": f"{_ICON_BASE}/schedule/baseline.svg",
     "sell": f"{_ICON_BASE}/sell/baseline.svg",
     "check": f"{_ICON_BASE}/check_circle/baseline.svg",
+    "star": f"{_ICON_BASE}/star/baseline.svg",
+    "star_border": f"{_ICON_BASE}/star_border/baseline.svg",
     "trending_down": f"{_ICON_BASE}/trending_down/baseline.svg",
     "trending_up": f"{_ICON_BASE}/trending_up/baseline.svg",
     "insights": f"{_ICON_BASE}/insights/baseline.svg",
@@ -219,9 +222,16 @@ def _tracked_url(listing: Listing, public_base_url: str) -> str:
     return f"{public_base_url}/click/{listing.id}?to={quote(listing.url, safe='')}"
 
 
+def _favorite_url(listing: Listing, public_base_url: str) -> str | None:
+    if not public_base_url or not listing.url or not listing.id:
+        return None
+    return f"{public_base_url}/favorite/{listing.id}?to={quote(listing.url, safe='')}"
+
+
 def _row_html(item: EnrichedListing, public_base_url: str = "") -> str:
     listing = item.listing
     link_url = _tracked_url(listing, public_base_url)
+    favorite_url = _favorite_url(listing, public_base_url)
     photo = listing.media.photo_urls[0] if listing.media.photo_urls else ""
     listed_date, days_listed = _days_listed(listing)
     listed_text = (
@@ -314,10 +324,12 @@ def _row_html(item: EnrichedListing, public_base_url: str = "") -> str:
             <img src="{photo}" width="600" style="display:block;width:100%;height:auto;max-height:280px;object-fit:cover;background:#f1f3f4;">
           </a>
           {'<div style="position:absolute;top:12px;left:12px;background:#1967d2;color:#ffffff;font-size:11px;font-weight:700;letter-spacing:0.5px;padding:5px 11px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.35);">NEW</div>' if item.is_new else ''}
+          {'<div style="position:absolute;top:12px;right:12px;background:#fbbc04;color:#202124;font-size:11px;font-weight:700;padding:5px 8px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.35);">' + _icon('star', 12) + 'FAVORITE</div>' if item.is_favorited else ''}
         </td>
       </tr>
       {f'<tr><td>{_price_drop_banner(item)}</td></tr>' if item.price_drop_from is not None else ''}
       {f'<tr><td style="padding:8px 20px 0 20px;">{_chip("Previously viewed", icon="check", bg="#e8eaed", color="#3c4043")}</td></tr>' if item.already_viewed else ''}
+      {f'<tr><td style="padding:8px 20px 0 20px;">{_chip("Add to favorites", icon="star_border", bg="#fff8e1", color="#8a6d00", href=favorite_url)}</td></tr>' if favorite_url and not item.is_favorited else ''}
       <tr>
         <td style="padding:18px 20px 20px 20px;font-family:{_FONT_STACK};">
           <a href="{link_url}" style="color:#202124;text-decoration:none;font-size:17px;font-weight:700;">{listing.title}</a>

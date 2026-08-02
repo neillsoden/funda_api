@@ -33,6 +33,14 @@ def _connect():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS favorites (
+                listing_id TEXT PRIMARY KEY,
+                favorited_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
         yield conn
         conn.commit()
     finally:
@@ -118,4 +126,33 @@ def clicked_listing_ids(listing_ids: list[str]) -> set[str]:
             f"SELECT listing_id FROM clicks WHERE listing_id IN ({placeholders})",
             listing_ids,
         )
+        return {row[0] for row in rows}
+
+
+def add_favorite(listing_id: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO favorites (listing_id, favorited_at) VALUES (?, datetime('now'))",
+            (listing_id,),
+        )
+
+
+def remove_favorite(listing_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM favorites WHERE listing_id = ?", (listing_id,))
+
+
+def favorited_listing_ids(listing_ids: list[str] | None = None) -> set[str]:
+    """All favorited listing IDs, or just the ones present in listing_ids if given."""
+    with _connect() as conn:
+        if listing_ids is None:
+            rows = conn.execute("SELECT listing_id FROM favorites")
+        elif not listing_ids:
+            return set()
+        else:
+            placeholders = ",".join("?" for _ in listing_ids)
+            rows = conn.execute(
+                f"SELECT listing_id FROM favorites WHERE listing_id IN ({placeholders})",
+                listing_ids,
+            )
         return {row[0] for row in rows}
