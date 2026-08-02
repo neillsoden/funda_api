@@ -17,7 +17,7 @@ from house_hunter.email_report import EnrichedListing, build_email_html, send_em
 from house_hunter.market import get_market_insights  # noqa: E402
 from house_hunter.poi import distance_to, nearest_place  # noqa: E402
 from house_hunter.pricing import previous_sale  # noqa: E402
-from house_hunter.search import budget_for_label, find_matching_listings  # noqa: E402
+from house_hunter.search import budget_for_label, find_matching_listings, is_under_bid  # noqa: E402
 from house_hunter.state import (  # noqa: E402
     classify_listings,
     clicked_listing_ids,
@@ -25,6 +25,7 @@ from house_hunter.state import (  # noqa: E402
     last_notified_price,
     record_notified,
     rejected_listing_ids,
+    sync_under_bid_listings,
 )
 from house_hunter.vrijescholen import nearest_vrijeschool  # noqa: E402
 
@@ -39,19 +40,30 @@ def run(force: bool = False) -> None:
         listings = find_matching_listings(client, config)
         print(f"{len(listings)} listings matched the search filters")
 
-        events = classify_listings([(listing.id, listing.price.amount) for listing in listings if listing.id])
-        rejected_ids = rejected_listing_ids([listing.id for listing in listings if listing.id])
+        under_bid_ids = [listing.id for listing in listings if listing.id and is_under_bid(listing)]
+        sync_under_bid_listings(under_bid_ids)
+        if under_bid_ids:
+            print(f"{len(under_bid_ids)} under bid (logged in the Onder bod tab, not emailed unless they reopen)")
+
+        available_listings = [listing for listing in listings if not is_under_bid(listing)]
+
+        events = classify_listings(
+            [(listing.id, listing.price.amount) for listing in available_listings if listing.id]
+        )
+        rejected_ids = rejected_listing_ids([listing.id for listing in available_listings if listing.id])
 
         if force:
-            notify_listings = [listing for listing in listings if listing.id not in rejected_ids]
+            notify_listings = [listing for listing in available_listings if listing.id not in rejected_ids]
             print(f"Force send: {len(notify_listings)} listings (ignoring dedup)")
         else:
             notify_listings = [
-                listing for listing in listings if listing.id in events and listing.id not in rejected_ids
+                listing for listing in available_listings if listing.id in events and listing.id not in rejected_ids
             ]
             new_count = sum(1 for e in events.values() if e == "new")
             drop_count = sum(1 for e in events.values() if e == "price_drop")
-            skipped_rejected = sum(1 for listing in listings if listing.id in events and listing.id in rejected_ids)
+            skipped_rejected = sum(
+                1 for listing in available_listings if listing.id in events and listing.id in rejected_ids
+            )
             print(f"{new_count} new, {drop_count} price drops, {skipped_rejected} skipped (marked not interested)")
 
         if not notify_listings:

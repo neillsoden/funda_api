@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Onder bod — House Hunter{% endblock %}
+{% block head %}
+<style>
+  .listing-card { display: flex; gap: 14px; align-items: center; }
+  .listing-card img { width: 110px; height: 80px; object-fit: cover; border-radius: 8px; background: var(--gray-100); flex-shrink: 0; }
+  .listing-card .info { flex: 1; }
+  .listing-card .title { font-weight: 700; text-decoration: none; color: var(--ink); font-size: 1rem; }
+  .listing-card .meta { color: var(--gray-500); font-size: 0.85rem; margin-top: 4px; }
+  .listing-card .price { color: var(--red); font-weight: 700; margin-top: 4px; }
+  .badge { display: inline-block; background: #fff8e1; color: #8a6d00; font-size: 0.72rem; font-weight: 700;
+    padding: 3px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; }
+</style>
+{% endblock %}
+{% block content %}
+  <h1>Onder bod</h1>
+  <p class="hint">Listings currently under offer/bid — logged here instead of emailed, since making an offer on one is generally pointless. If an offer falls through and it reopens, it'll show up in your email automatically.</p>
+  {% if not listings %}
+    <div class="card"><p class="hint" style="margin:0;">Nothing currently under bid.</p></div>
+  {% endif %}
+  {% for l in listings %}
+    <div class="card listing-card">
+      <img src="{{ l.media.photo_urls[0] if l.media.photo_urls else '' }}">
+      <div class="info">
+        <a class="title" href="{{ l.url }}">{{ l.title }}</a>
+        <div class="meta">{{ l.city }}{% if l.bedrooms %} &middot; {{ l.bedrooms }} bedrooms{% endif %}</div>
+        <div class="price">{% if l.price.amount %}€{{ '{:,}'.format(l.price.amount) }}{% endif %}</div>
+      </div>
+      <span class="badge">Onder bod</span>
+    </div>
+  {% endfor %}
+{% endblock %}

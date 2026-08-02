@@ -79,6 +79,15 @@ def _connect():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS under_bid_listings (
+                listing_id TEXT PRIMARY KEY,
+                first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+                last_checked_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
         yield conn
         conn.commit()
     finally:
@@ -239,3 +248,34 @@ def rejected_listing_ids(listing_ids: list[str] | None = None) -> set[str]:
                 listing_ids,
             )
         return {row[0] for row in rows}
+
+
+def sync_under_bid_listings(listing_ids: list[str]) -> None:
+    """Replace the under-bid set with exactly what's under bid right now -
+    upserts current ones (keeping first_seen_at), drops anything no longer
+    under bid (reopened or sold)."""
+    with _connect() as conn:
+        if listing_ids:
+            conn.executemany(
+                """
+                INSERT INTO under_bid_listings (listing_id, first_seen_at, last_checked_at)
+                VALUES (?, datetime('now'), datetime('now'))
+                ON CONFLICT(listing_id) DO UPDATE SET last_checked_at = datetime('now')
+                """,
+                [(listing_id,) for listing_id in listing_ids],
+            )
+            placeholders = ",".join("?" for _ in listing_ids)
+            conn.execute(
+                f"DELETE FROM under_bid_listings WHERE listing_id NOT IN ({placeholders})",
+                listing_ids,
+            )
+        else:
+            conn.execute("DELETE FROM under_bid_listings")
+
+
+def under_bid_listing_ids() -> list[str]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT listing_id FROM under_bid_listings ORDER BY first_seen_at DESC"
+        )
+        return [row[0] for row in rows]

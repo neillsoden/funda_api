@@ -34,6 +34,7 @@ from house_hunter.state import (  # noqa: E402
     rejected_listing_ids,
     remove_favorite,
     remove_rejected,
+    under_bid_listing_ids,
 )
 from house_hunter.vrijescholen import list_all_schools  # noqa: E402
 from house_hunter.webapp.auth import (  # noqa: E402
@@ -382,6 +383,24 @@ def schools():
     for school in all_schools:
         grouped.setdefault(school["city"] or "Unknown", []).append(school)
     return render_template("schools.html", grouped=dict(sorted(grouped.items())))
+
+
+@app.route("/onder-bod", methods=["GET"])
+@login_required
+def onder_bod():
+    """Listings currently "under bid" - logged here instead of emailed, since
+    making an offer on one is generally pointless. If one reopens (offer
+    falls through), it flows back into the normal email pipeline on its own."""
+    ids = under_bid_listing_ids()
+    listings = []
+    if ids:
+        with Funda() as client:
+            for listing_id in ids:
+                try:
+                    listings.append(client.listing(listing_id))
+                except FundaError:
+                    continue
+    return render_template("onder_bod.html", listings=listings)
 
 
 if __name__ == "__main__":

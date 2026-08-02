@@ -34,6 +34,16 @@ def _is_actually_available(listing: Listing) -> bool:
     return (listing.status or "").lower() in _ACTIVE_STATUSES
 
 
+def is_under_bid(listing: Listing) -> bool:
+    """"Onder bod" (under offer/bid) - a status between fully available and
+    sold. pyfunda's own parsing doesn't normalize this cleanly: .status shows
+    the generic "negotiations" while .property_details.raw_status carries the
+    literal Dutch text "Onder bod", so check the raw value directly.
+    """
+    raw = (listing.property_details.raw_status or "").strip().lower()
+    return raw == "onder bod" or (listing.status or "").lower() == "negotiations"
+
+
 def find_matching_listings(client: Funda, config: dict) -> list[Listing]:
     """Search every configured location and return full-detail Listing objects,
     deduplicated across locations and filtered to the energy-label-aware
