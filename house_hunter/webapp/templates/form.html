@@ -1,38 +1,20 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>House Hunter — Preferences</title>
-  <style>
-    body { font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
-    h1 { font-size: 1.5rem; }
-    h2 { font-size: 1.1rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
-    label { display: block; font-size: 0.85rem; color: #444; margin-top: 12px; margin-bottom: 4px; }
-    input[type=text], input[type=number], select, textarea {
-      width: 100%; padding: 8px; box-sizing: border-box; font-size: 0.95rem;
-      border: 1px solid #ccc; border-radius: 4px;
-    }
-    .row { display: flex; gap: 16px; }
-    .row > div { flex: 1; }
-    .place-box { border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-top: 10px; position: relative; }
-    .place-row { display: grid; grid-template-columns: 1.5fr 2fr 1fr; gap: 8px; }
-    .place-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-    .place-row label, .place-row-2 label { margin-top: 0; }
-    .place-box .btn-remove { position: absolute; top: 10px; right: 10px; margin-top: 0; padding: 4px 10px; font-size: 0.8rem; }
-    button, .btn { margin-top: 16px; padding: 8px 16px; font-size: 0.95rem; border-radius: 4px; border: 1px solid #333; background: #1a1a1a; color: white; cursor: pointer; }
-    .btn-secondary { background: white; color: #1a1a1a; }
-    .btn-remove { background: white; color: #a00; border-color: #a00; padding: 8px 10px; margin-top: 0; }
-    .saved { color: #146c2e; font-size: 0.9rem; }
-    .errors { background: #fdecea; border: 1px solid #f5c2c0; color: #a00; padding: 12px; border-radius: 4px; margin-top: 16px; }
-    .hint { font-size: 0.8rem; color: #777; margin-top: 2px; }
-  </style>
-</head>
-<body>
-  <h1>House Hunter — Search Preferences</h1>
-  <p class="hint">Edits here are saved to <code>config.json</code> and picked up by the next scheduled search run.</p>
+{% extends "base.html" %}
+{% block title %}Preferences — House Hunter{% endblock %}
+{% block head %}
+<style>
+  .place-box { border: 1px solid var(--slate-200); border-radius: 10px; padding: 14px; margin-top: 10px; position: relative; }
+  .place-row { display: grid; grid-template-columns: 1.5fr 2fr 1fr; gap: 8px; }
+  .place-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .place-row label, .place-row-2 label { margin-top: 0; }
+  .place-box .btn-remove { position: absolute; top: 12px; right: 12px; }
+</style>
+{% endblock %}
+{% block content %}
+  <h1>Search Preferences</h1>
+  <p class="hint">Edits here are saved and picked up by the next scheduled search run.</p>
 
   {% if last_saved %}
-    <p class="saved">Last saved: {{ last_saved }}</p>
+    <p class="saved">✓ Last saved: {{ last_saved }}</p>
   {% endif %}
 
   {% if errors %}
@@ -45,6 +27,7 @@
   {% endif %}
 
   <form method="post" action="{{ url_for('save') }}">
+    <div class="card">
     <h2>Search</h2>
     <label for="locations">Locations (one city/region per line)</label>
     <textarea id="locations" name="locations" rows="2">{{ config.search.locations|join('\n') }}</textarea>
@@ -104,13 +87,14 @@
         <input type="number" id="max_area" name="max_area" value="{{ config.search.max_area if config.search.max_area is not none else '' }}">
       </div>
     </div>
+    </div>
 
     <h2>Places to measure distance to</h2>
     <p class="hint">e.g. a train station or other fixed landmark. (Vrijeschool distance is automatic now — see below, no need to add it here.) Set city to scope a place to listings in that city only (e.g. so "Arnhem Centraal" doesn't show on Nijmegen listings) — leave city blank to apply everywhere. Leave lat/lng blank and it will be geocoded from the address on save (requires GOOGLE_PLACES_API_KEY in .env).</p>
     <div id="place-rows">
       {% for place in config.poi.places %}
         <div class="place-box">
-          <button type="button" class="btn-remove" onclick="this.parentElement.remove()">Remove</button>
+          <button type="button" class="btn btn-remove" onclick="this.parentElement.remove()">Remove</button>
           <div class="place-row">
             <div>
               <label>Name</label>
@@ -141,31 +125,45 @@
     <button type="button" class="btn btn-secondary" onclick="addPlaceRow()">+ Add place</button>
 
     <h2>Vrijeschool distance</h2>
+    <div class="card">
     <p class="hint">Every listing is automatically checked against the nearest vrijeschool (from vrijescholen.nl), no address entry needed. Set a max biking distance below to exclude listings too far from any vrijeschool.</p>
     <label for="max_school_distance_km">Max distance to nearest vrijeschool (km, biking distance)</label>
     <input type="number" step="0.1" id="max_school_distance_km" name="max_school_distance_km" value="{{ config.search.max_school_distance_km if config.search.max_school_distance_km is not none else '' }}">
     <p class="hint">Leave blank to not filter on this (distance will still be shown).</p>
+    </div>
 
     <h2>Email</h2>
+    <div class="card">
     <label for="from_address">From address (optional, defaults to the SMTP username)</label>
     <input type="text" id="from_address" name="from_address" value="{{ config.email.from_address or '' }}">
     <label for="to_addresses">Recipients (one email per line)</label>
     <textarea id="to_addresses" name="to_addresses" rows="3">{{ config.email.to_addresses|join('\n') }}</textarea>
+    </div>
+
+    <h2>People</h2>
+    <div class="card">
+    <p class="hint">Names shown as separate "Favorite" buttons in each email (one per line). Everyone can see everyone else's favorites at <a href="/favorites">/favorites</a>.</p>
+    <label for="people">Household members (one name per line)</label>
+    <textarea id="people" name="people" rows="2">{{ config.people|join('\n') }}</textarea>
+    </div>
 
     <h2>Schedule</h2>
+    <div class="card">
     <label for="frequency">How often to check for new listings</label>
     <select id="frequency" name="frequency">
       {% for option in frequency_options %}
         <option value="{{ option }}" {% if config.schedule.frequency == option %}selected{% endif %}>{{ option }}</option>
       {% endfor %}
     </select>
+    </div>
 
     <h2>Server</h2>
+    <div class="card">
     <label for="public_base_url">Public URL of this webapp (for email click tracking)</label>
     <input type="text" id="public_base_url" name="public_base_url" value="{{ config.server.public_base_url or '' }}" placeholder="e.g. https://house.example.com">
     <p class="hint">Leave blank while running on localhost only — links in emails go straight to Funda and clicks aren't tracked. Set this once the webapp is deployed somewhere reachable, and future email links will route through here first to record "already viewed" listings.</p>
+    </div>
 
-    <br>
     <button type="submit">Save preferences</button>
   </form>
 
@@ -175,7 +173,7 @@
       const box = document.createElement('div');
       box.className = 'place-box';
       box.innerHTML = `
-        <button type="button" class="btn-remove" onclick="this.parentElement.remove()">Remove</button>
+        <button type="button" class="btn btn-remove" onclick="this.parentElement.remove()">Remove</button>
         <div class="place-row">
           <div><label>Name</label><input type="text" name="place_name" placeholder="e.g. Nijmegen Centraal"></div>
           <div><label>Address</label><input type="text" name="place_address" placeholder="street, postcode, city"></div>
@@ -189,5 +187,4 @@
       container.appendChild(box);
     }
   </script>
-</body>
-</html>
+{% endblock %}

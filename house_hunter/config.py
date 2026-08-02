@@ -70,6 +70,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "from_address": "",
         "to_addresses": [],
     },
+    # Named household members. Drives per-person favorite buttons in emails
+    # (no login system exists, so "who" is just a labeled button per person -
+    # good enough for a shared household inbox, not real authentication).
+    "people": [],
     "schedule": {
         "frequency": "daily",
     },

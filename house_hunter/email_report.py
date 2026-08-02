@@ -28,7 +28,7 @@ class EnrichedListing:
     max_school_distance_km: float | None = None  # configured biking-distance threshold
     already_viewed: bool = False  # link was clicked in a previous email
     is_new: bool = True  # first time this listing has ever been emailed
-    is_favorited: bool = False  # already marked favorite via a previous email
+    favorited_by: set[str] = field(default_factory=set)  # people who already favorited this
 
 
 def _days_listed(listing: Listing) -> tuple[str, int] | tuple[None, None]:
@@ -87,6 +87,7 @@ _ICONS = {
     "check": f"{_ICON_BASE}/check_circle/baseline.svg",
     "star": f"{_ICON_BASE}/star/baseline.svg",
     "star_border": f"{_ICON_BASE}/star_border/baseline.svg",
+    "not_interested": f"{_ICON_BASE}/not_interested/baseline.svg",
     "trending_down": f"{_ICON_BASE}/trending_down/baseline.svg",
     "trending_up": f"{_ICON_BASE}/trending_up/baseline.svg",
     "insights": f"{_ICON_BASE}/insights/baseline.svg",
@@ -222,16 +223,45 @@ def _tracked_url(listing: Listing, public_base_url: str) -> str:
     return f"{public_base_url}/click/{listing.id}?to={quote(listing.url, safe='')}"
 
 
-def _favorite_url(listing: Listing, public_base_url: str) -> str | None:
+def _favorite_url(listing: Listing, public_base_url: str, person: str) -> str | None:
     if not public_base_url or not listing.url or not listing.id:
         return None
-    return f"{public_base_url}/favorite/{listing.id}?to={quote(listing.url, safe='')}"
+    return (
+        f"{public_base_url}/favorite/{listing.id}?person={quote(person)}"
+        f"&to={quote(listing.url, safe='')}"
+    )
 
 
-def _row_html(item: EnrichedListing, public_base_url: str = "") -> str:
+def _reject_url(listing: Listing, public_base_url: str) -> str | None:
+    if not public_base_url or not listing.id:
+        return None
+    return f"{public_base_url}/reject/{listing.id}"
+
+
+def _favorite_and_reject_row(
+    item: EnrichedListing, public_base_url: str, people: list[str], reject_url: str | None
+) -> str:
+    """One row of small action chips: a favorite button per person who hasn't
+    already favorited this listing, plus a "not interested" button."""
+    chips = []
+    for person in people:
+        if person in item.favorited_by:
+            continue
+        url = _favorite_url(item.listing, public_base_url, person)
+        if url:
+            chips.append(_chip(f"Favorite ({person})", icon="star_border", bg="#fff8e1", color="#8a6d00", href=url))
+    if reject_url:
+        chips.append(_chip("Not interested", icon="not_interested", bg="#f1f3f4", color="#5f6368", href=reject_url))
+    if not chips:
+        return ""
+    return f'<tr><td style="padding:8px 20px 0 20px;">{"".join(chips)}</td></tr>'
+
+
+def _row_html(item: EnrichedListing, public_base_url: str = "", people: list[str] | None = None) -> str:
     listing = item.listing
+    people = people or []
     link_url = _tracked_url(listing, public_base_url)
-    favorite_url = _favorite_url(listing, public_base_url)
+    reject_url = _reject_url(listing, public_base_url)
     photo = listing.media.photo_urls[0] if listing.media.photo_urls else ""
     listed_date, days_listed = _days_listed(listing)
     listed_text = (
@@ -324,12 +354,12 @@ def _row_html(item: EnrichedListing, public_base_url: str = "") -> str:
             <img src="{photo}" width="600" style="display:block;width:100%;height:auto;max-height:280px;object-fit:cover;background:#f1f3f4;">
           </a>
           {'<div style="position:absolute;top:12px;left:12px;background:#1967d2;color:#ffffff;font-size:11px;font-weight:700;letter-spacing:0.5px;padding:5px 11px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.35);">NEW</div>' if item.is_new else ''}
-          {'<div style="position:absolute;top:12px;right:12px;background:#fbbc04;color:#202124;font-size:11px;font-weight:700;padding:5px 8px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.35);">' + _icon('star', 12) + 'FAVORITE</div>' if item.is_favorited else ''}
+          {'<div style="position:absolute;top:12px;right:12px;background:#fbbc04;color:#202124;font-size:11px;font-weight:700;padding:5px 8px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.35);">' + _icon('star', 12) + '&#9733; ' + ', '.join(sorted(item.favorited_by)) + '</div>' if item.favorited_by else ''}
         </td>
       </tr>
       {f'<tr><td>{_price_drop_banner(item)}</td></tr>' if item.price_drop_from is not None else ''}
       {f'<tr><td style="padding:8px 20px 0 20px;">{_chip("Previously viewed", icon="check", bg="#e8eaed", color="#3c4043")}</td></tr>' if item.already_viewed else ''}
-      {f'<tr><td style="padding:8px 20px 0 20px;">{_chip("Add to favorites", icon="star_border", bg="#fff8e1", color="#8a6d00", href=favorite_url)}</td></tr>' if favorite_url and not item.is_favorited else ''}
+      {_favorite_and_reject_row(item, public_base_url, people, reject_url)}
       <tr>
         <td style="padding:18px 20px 20px 20px;font-family:{_FONT_STACK};">
           <a href="{link_url}" style="color:#202124;text-decoration:none;font-size:17px;font-weight:700;">{listing.title}</a>
@@ -353,8 +383,10 @@ _SPACER = (
 )
 
 
-def build_email_html(items: list[EnrichedListing], title: str, public_base_url: str = "") -> str:
-    cards_html = _SPACER.join(_row_html(item, public_base_url) for item in items)
+def build_email_html(
+    items: list[EnrichedListing], title: str, public_base_url: str = "", people: list[str] | None = None
+) -> str:
+    cards_html = _SPACER.join(_row_html(item, public_base_url, people) for item in items)
     return f"""
     <html>
     <body style="margin:0;padding:24px 12px;background:#f4f5f7;font-family:{_FONT_STACK};">

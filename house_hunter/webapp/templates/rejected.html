@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Favorites — House Hunter{% endblock %}
+{% block title %}Not Interested — House Hunter{% endblock %}
 {% block head %}
 <style>
   .listing-card { display: flex; gap: 14px; align-items: center; }
@@ -8,33 +8,24 @@
   .listing-card .title { font-weight: 700; text-decoration: none; color: var(--slate-900); font-size: 1rem; }
   .listing-card .meta { color: var(--slate-500); font-size: 0.85rem; margin-top: 4px; }
   .listing-card .price { color: var(--indigo); font-weight: 700; margin-top: 4px; }
-  .who { margin-top: 6px; }
-  .who span { display: inline-block; background: #fff8e1; color: #8a6d00; font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-right: 4px; }
-  .actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
-  .unfav { color: var(--red); font-size: 0.8rem; text-decoration: none; white-space: nowrap; }
+  .undo { color: var(--indigo); font-size: 0.85rem; text-decoration: none; white-space: nowrap; }
 </style>
 {% endblock %}
 {% block content %}
-  <h1>Favorites</h1>
-  <p class="hint">Everyone in the household can see everyone else's favorites here.</p>
+  <h1>Not Interested</h1>
+  <p class="hint">These will never be emailed again. Remove one from here to let it show up again.</p>
   {% if not listings %}
-    <div class="card"><p class="hint" style="margin:0;">No favorites yet. Tap "Favorite" on a listing in an email to add one.</p></div>
+    <div class="card"><p class="hint" style="margin:0;">Nothing marked "not interested" yet.</p></div>
   {% endif %}
-  {% for item in listings %}
-    {% set l = item.listing %}
+  {% for l in listings %}
     <div class="card listing-card">
       <img src="{{ l.media.photo_urls[0] if l.media.photo_urls else '' }}">
       <div class="info">
         <a class="title" href="{{ l.url }}">{{ l.title }}</a>
         <div class="meta">{{ l.city }}{% if l.bedrooms %} &middot; {{ l.bedrooms }} bedrooms{% endif %}</div>
         <div class="price">{% if l.price.amount %}€{{ '{:,}'.format(l.price.amount) }}{% endif %}</div>
-        <div class="who">{% for person in item.favorited_by %}<span>&#9733; {{ person }}</span>{% endfor %}</div>
       </div>
-      <div class="actions">
-        {% for person in item.favorited_by %}
-          <a class="unfav" href="/unfavorite/{{ l.id }}?person={{ person }}">Remove ({{ person }})</a>
-        {% endfor %}
-      </div>
+      <a class="undo" href="/unreject/{{ l.id }}">Undo</a>
     </div>
   {% endfor %}
 {% endblock %}

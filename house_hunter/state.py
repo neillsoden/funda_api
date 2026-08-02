@@ -9,6 +9,33 @@ from contextlib import contextmanager
 from house_hunter.config import state_path
 
 
+def _migrate_favorites_to_per_person(conn: sqlite3.Connection) -> None:
+    """One-time migration: the favorites table used to be listing_id-only
+    (anonymous). Preserve any existing rows under a generic 'household' label
+    rather than losing them.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(favorites)")}
+    if "person" in columns:
+        return
+    conn.execute("ALTER TABLE favorites RENAME TO favorites_old")
+    conn.execute(
+        """
+        CREATE TABLE favorites (
+            listing_id TEXT NOT NULL,
+            person TEXT NOT NULL,
+            favorited_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (listing_id, person)
+        )
+        """
+    )
+    old_rows = conn.execute("SELECT listing_id, favorited_at FROM favorites_old").fetchall()
+    conn.executemany(
+        "INSERT OR IGNORE INTO favorites (listing_id, person, favorited_at) VALUES (?, 'household', ?)",
+        old_rows,
+    )
+    conn.execute("DROP TABLE favorites_old")
+
+
 @contextmanager
 def _connect():
     conn = sqlite3.connect(state_path())
@@ -36,8 +63,19 @@ def _connect():
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS favorites (
+                listing_id TEXT NOT NULL,
+                person TEXT NOT NULL,
+                favorited_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (listing_id, person)
+            )
+            """
+        )
+        _migrate_favorites_to_per_person(conn)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rejected (
                 listing_id TEXT PRIMARY KEY,
-                favorited_at TEXT NOT NULL DEFAULT (datetime('now'))
+                rejected_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
             """
         )
@@ -129,30 +167,75 @@ def clicked_listing_ids(listing_ids: list[str]) -> set[str]:
         return {row[0] for row in rows}
 
 
-def add_favorite(listing_id: str) -> None:
+def add_favorite(listing_id: str, person: str) -> None:
     with _connect() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO favorites (listing_id, favorited_at) VALUES (?, datetime('now'))",
+            "INSERT OR IGNORE INTO favorites (listing_id, person, favorited_at) VALUES (?, ?, datetime('now'))",
+            (listing_id, person),
+        )
+
+
+def remove_favorite(listing_id: str, person: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "DELETE FROM favorites WHERE listing_id = ? AND person = ?", (listing_id, person)
+        )
+
+
+def favorited_by(listing_ids: list[str]) -> dict[str, set[str]]:
+    """{listing_id: {person, ...}} for each listing_id that has at least one
+    favorite. Everyone can see everyone else's favorites - this is shared
+    household state, not per-person private data.
+    """
+    if not listing_ids:
+        return {}
+    with _connect() as conn:
+        placeholders = ",".join("?" for _ in listing_ids)
+        rows = conn.execute(
+            f"SELECT listing_id, person FROM favorites WHERE listing_id IN ({placeholders})",
+            listing_ids,
+        )
+        result: dict[str, set[str]] = {}
+        for listing_id, person in rows:
+            result.setdefault(listing_id, set()).add(person)
+        return result
+
+
+def all_favorited_listing_ids() -> list[str]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT listing_id FROM favorites ORDER BY favorited_at DESC"
+        )
+        return [row[0] for row in rows]
+
+
+def add_rejected(listing_id: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO rejected (listing_id, rejected_at) VALUES (?, datetime('now'))",
             (listing_id,),
         )
 
 
-def remove_favorite(listing_id: str) -> None:
+def remove_rejected(listing_id: str) -> None:
     with _connect() as conn:
-        conn.execute("DELETE FROM favorites WHERE listing_id = ?", (listing_id,))
+        conn.execute("DELETE FROM rejected WHERE listing_id = ?", (listing_id,))
 
 
-def favorited_listing_ids(listing_ids: list[str] | None = None) -> set[str]:
-    """All favorited listing IDs, or just the ones present in listing_ids if given."""
+def rejected_listing_ids(listing_ids: list[str] | None = None) -> set[str]:
+    """All rejected ('not interested') listing IDs, or just the ones present in
+    listing_ids if given. Rejected listings should never be emailed again,
+    regardless of price changes.
+    """
     with _connect() as conn:
         if listing_ids is None:
-            rows = conn.execute("SELECT listing_id FROM favorites")
+            rows = conn.execute("SELECT listing_id FROM rejected")
         elif not listing_ids:
             return set()
         else:
             placeholders = ",".join("?" for _ in listing_ids)
             rows = conn.execute(
-                f"SELECT listing_id FROM favorites WHERE listing_id IN ({placeholders})",
+                f"SELECT listing_id FROM rejected WHERE listing_id IN ({placeholders})",
                 listing_ids,
             )
         return {row[0] for row in rows}

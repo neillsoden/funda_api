@@ -1,14 +1,18 @@
-"""Local-only web form for editing house_hunter/config.json, plus the public
-/click redirect endpoint used for email click tracking.
+"""Web form for editing house_hunter/config.json, favorites/rejected views,
+and the public /click, /favorite, /reject endpoints used from emails.
+
+Reachable from the public internet (home.amglab.dev via nginx on the deploy
+box), so every route except /login requires a real session login.
 """
 
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
-from flask import Flask, abort, redirect, render_template, request, url_for
+from flask import Flask, abort, redirect, render_template, request, session, url_for
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
@@ -19,14 +23,34 @@ from house_hunter.config import load_config, save_config  # noqa: E402
 from house_hunter.poi import geocode_address  # noqa: E402
 from house_hunter.state import (  # noqa: E402
     add_favorite,
-    favorited_listing_ids,
+    add_rejected,
+    all_favorited_listing_ids,
+    favorited_by,
     record_click,
+    rejected_listing_ids,
     remove_favorite,
+    remove_rejected,
+)
+from house_hunter.webapp.auth import (  # noqa: E402
+    is_rate_limited,
+    login_required,
+    record_failed_attempt,
+    safe_next_url,
+    verify_credentials,
 )
 
 _ALLOWED_REDIRECT_HOSTS = {"www.funda.nl", "funda.nl"}
 
 app = Flask(__name__)
+app.secret_key = os.environ["FLASK_SECRET_KEY"]
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    # nginx terminates HTTPS in front of this in production; set
+    # FORCE_HTTPS_COOKIES=1 in that .env so the session cookie requires TLS.
+    SESSION_COOKIE_SECURE=os.environ.get("FORCE_HTTPS_COOKIES") == "1",
+    PERMANENT_SESSION_LIFETIME=60 * 60 * 24 * 30,  # 30 days
+)
 
 FREQUENCY_OPTIONS = ["hourly", "twice_daily", "daily", "weekly"]
 CATEGORY_OPTIONS = ["buy", "rent"]
@@ -40,7 +64,37 @@ def _to_int(value: str) -> int | None:
     return int(value) if value else None
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    next_url = request.values.get("next", "")
+
+    if request.method == "GET":
+        return render_template("login.html", error=None, next=next_url)
+
+    if is_rate_limited():
+        return render_template(
+            "login.html", error="Too many attempts. Try again in a few minutes.", next=next_url
+        )
+
+    username = request.form.get("username", "")
+    password = request.form.get("password", "")
+    if verify_credentials(username, password):
+        session.permanent = True
+        session["user"] = username.strip().lower()
+        return redirect(safe_next_url(next_url))
+
+    record_failed_attempt()
+    return render_template("login.html", error="Incorrect username or password.", next=next_url)
+
+
+@app.route("/logout", methods=["GET"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 @app.route("/", methods=["GET"])
+@login_required
 def form():
     config = load_config()
     return render_template(
@@ -55,6 +109,7 @@ def form():
 
 
 @app.route("/save", methods=["POST"])
+@login_required
 def save():
     global _last_saved
 
@@ -82,6 +137,12 @@ def save():
     for address in to_addresses:
         if "@" not in address:
             errors.append(f"'{address}' does not look like a valid email address")
+
+    people = [
+        line.strip()
+        for line in form_data.get("people", "").splitlines()
+        if line.strip()
+    ]
 
     places = []
     names = request.form.getlist("place_name")
@@ -144,6 +205,7 @@ def save():
             "from_address": form_data.get("from_address", "").strip(),
             "to_addresses": to_addresses,
         },
+        "people": people,
         "schedule": {"frequency": form_data.get("frequency", "daily")},
         "server": {"public_base_url": form_data.get("public_base_url", "").strip().rstrip("/")},
     }
@@ -168,10 +230,11 @@ def save():
 
 
 @app.route("/click/<listing_id>", methods=["GET"])
+@login_required
 def click(listing_id: str):
     """Logs a click on a listing link, then redirects to the real Funda page.
     Only redirects to funda.nl hosts, to avoid this becoming an open redirect.
-    Also marks the listing as favorited if ?favorite=1 is present.
+    Also marks the listing as favorited if ?favorite=<person> is present.
     """
     target = request.args.get("to", "")
     host = urlparse(target).hostname
@@ -179,8 +242,9 @@ def click(listing_id: str):
         abort(400)
 
     record_click(listing_id)
-    if request.args.get("favorite") == "1":
-        add_favorite(listing_id)
+    person = request.args.get("favorite", "").strip()
+    if person:
+        add_favorite(listing_id, person)
     return redirect(target, code=302)
 
 
@@ -194,23 +258,65 @@ a{{color:#1967d2;}}</style></head>
 
 
 @app.route("/favorite/<listing_id>", methods=["GET"])
+@login_required
 def favorite(listing_id: str):
-    """Marks a listing favorited without redirecting away (idempotent GET, safe
-    against email security scanners pre-fetching the link)."""
-    add_favorite(listing_id)
+    """Marks a listing favorited by ?person=<name>, without redirecting away
+    (idempotent GET, safe against email security scanners pre-fetching the
+    link)."""
+    person = request.args.get("person", "").strip()
+    if not person:
+        abort(400)
+    add_favorite(listing_id, person)
     back_url = request.args.get("to", "/favorites")
-    return _CONFIRM_PAGE.format(message="Added to favorites", back_url=back_url)
+    return _CONFIRM_PAGE.format(message=f"Added to {person}'s favorites", back_url=back_url)
 
 
 @app.route("/unfavorite/<listing_id>", methods=["GET"])
+@login_required
 def unfavorite(listing_id: str):
-    remove_favorite(listing_id)
+    person = request.args.get("person", "").strip()
+    if person:
+        remove_favorite(listing_id, person)
     return redirect(url_for("favorites"))
 
 
 @app.route("/favorites", methods=["GET"])
+@login_required
 def favorites():
-    ids = sorted(favorited_listing_ids())
+    ids = all_favorited_listing_ids()
+    by_person = favorited_by(ids)
+    listings = []
+    if ids:
+        with Funda() as client:
+            for listing_id in ids:
+                try:
+                    listing = client.listing(listing_id)
+                except FundaError:
+                    continue
+                listings.append({"listing": listing, "favorited_by": sorted(by_person.get(listing_id, []))})
+    return render_template("favorites.html", listings=listings)
+
+
+@app.route("/reject/<listing_id>", methods=["GET"])
+@login_required
+def reject(listing_id: str):
+    """Marks a listing 'not interested' - it will never be emailed again,
+    regardless of price changes. Idempotent GET."""
+    add_rejected(listing_id)
+    return _CONFIRM_PAGE.format(message="Got it, won't show this one again", back_url="/rejected")
+
+
+@app.route("/unreject/<listing_id>", methods=["GET"])
+@login_required
+def unreject(listing_id: str):
+    remove_rejected(listing_id)
+    return redirect(url_for("rejected"))
+
+
+@app.route("/rejected", methods=["GET"])
+@login_required
+def rejected():
+    ids = sorted(rejected_listing_ids())
     listings = []
     if ids:
         with Funda() as client:
@@ -219,7 +325,7 @@ def favorites():
                     listings.append(client.listing(listing_id))
                 except FundaError:
                     continue
-    return render_template("favorites.html", listings=listings)
+    return render_template("rejected.html", listings=listings)
 
 
 if __name__ == "__main__":

@@ -21,9 +21,10 @@ from house_hunter.search import budget_for_label, find_matching_listings  # noqa
 from house_hunter.state import (  # noqa: E402
     classify_listings,
     clicked_listing_ids,
-    favorited_listing_ids,
+    favorited_by,
     last_notified_price,
     record_notified,
+    rejected_listing_ids,
 )
 from house_hunter.vrijescholen import nearest_vrijeschool  # noqa: E402
 
@@ -36,10 +37,14 @@ def run() -> None:
         print(f"{len(listings)} listings matched the search filters")
 
         events = classify_listings([(listing.id, listing.price.amount) for listing in listings if listing.id])
-        notify_listings = [listing for listing in listings if listing.id in events]
+        rejected_ids = rejected_listing_ids([listing.id for listing in listings if listing.id])
+        notify_listings = [
+            listing for listing in listings if listing.id in events and listing.id not in rejected_ids
+        ]
         new_count = sum(1 for e in events.values() if e == "new")
         drop_count = sum(1 for e in events.values() if e == "price_drop")
-        print(f"{new_count} new, {drop_count} price drops")
+        skipped_rejected = sum(1 for listing in listings if listing.id in events and listing.id in rejected_ids)
+        print(f"{new_count} new, {drop_count} price drops, {skipped_rejected} skipped (marked not interested)")
 
         if not notify_listings:
             print("Nothing new to send.")
@@ -49,7 +54,7 @@ def run() -> None:
         nearest_types = config["poi"].get("nearest_types", [])
         mortgage_budget = config["search"].get("mortgage_budget") or {}
         viewed_ids = clicked_listing_ids([listing.id for listing in notify_listings if listing.id])
-        favorite_ids = favorited_listing_ids([listing.id for listing in notify_listings if listing.id])
+        favorites_by_listing = favorited_by([listing.id for listing in notify_listings if listing.id])
         enriched: list[EnrichedListing] = []
         for listing in notify_listings:
             coords = listing.location.coordinates
@@ -98,7 +103,7 @@ def run() -> None:
                     max_school_distance_km=config["search"].get("max_school_distance_km"),
                     already_viewed=listing.id in viewed_ids,
                     is_new=events.get(listing.id) == "new",
-                    is_favorited=listing.id in favorite_ids,
+                    favorited_by=favorites_by_listing.get(listing.id, set()),
                 )
             )
 
@@ -122,7 +127,8 @@ def run() -> None:
     )
     title = f"House Hunter — {locations} (new matches)"
     public_base_url = config.get("server", {}).get("public_base_url", "")
-    html = build_email_html(enriched, title, public_base_url)
+    people = config.get("people", [])
+    html = build_email_html(enriched, title, public_base_url, people)
 
     to_addresses = config["email"]["to_addresses"]
     if not to_addresses:
