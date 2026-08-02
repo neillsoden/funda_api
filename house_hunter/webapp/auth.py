@@ -3,6 +3,7 @@ limiting. This app is reachable from the public internet (home.amglab.dev),
 so this is treated as a real login, not a formality.
 """
 
+import base64
 import os
 import time
 from functools import wraps
@@ -17,10 +18,17 @@ _failed_attempts: dict[str, list[float]] = {}
 
 
 def _load_users() -> dict[str, str]:
-    """{username: password_hash}, parsed from AUTH_USERS env var:
-    "neill:<hash>,yvonne:<hash>"
+    """{username: password_hash}, parsed from AUTH_USERS_B64 env var: base64 of
+    "neill:<hash>,yvonne:<hash>". Base64-encoded because password hashes
+    contain literal "$" characters, and Docker Compose's env_file loader
+    treats "$" as shell-style variable interpolation - it silently mangled
+    the hashes into blank strings when stored as plain AUTH_USERS.
     """
-    raw = os.environ.get("AUTH_USERS", "")
+    raw_b64 = os.environ.get("AUTH_USERS_B64", "")
+    try:
+        raw = base64.b64decode(raw_b64).decode() if raw_b64 else ""
+    except (base64.binascii.Error, UnicodeDecodeError):
+        raw = ""
     users: dict[str, str] = {}
     for entry in raw.split(","):
         entry = entry.strip()
