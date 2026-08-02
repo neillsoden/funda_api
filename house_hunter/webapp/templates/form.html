@@ -28,16 +28,21 @@
     <div>
       <strong>Force a check now</strong>
       {% if run_status.running %}
-        <div class="status running">Checking Funda now — this page will refresh automatically…</div>
+        <div class="status running">{{ 'Sending full digest' if run_status.forced else 'Checking Funda' }} now — this page will refresh automatically…</div>
       {% elif run_status.finished_at %}
-        <div class="status">Last manual check: {{ run_status.finished_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>
+        <div class="status">Last manual {{ 'send' if run_status.forced else 'check' }}: {{ run_status.finished_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>
       {% else %}
-        <div class="status">Runs the search right now instead of waiting for the schedule. Emails only if there's something new.</div>
+        <div class="status">Runs the search right now instead of waiting for the schedule. "Check now" only emails if something's new; "Force send" emails the full current digest regardless.</div>
       {% endif %}
     </div>
-    <form method="post" action="{{ url_for('run_now') }}">
-      <button type="submit" {% if run_status.running %}disabled{% endif %}>{{ 'Checking…' if run_status.running else 'Check now' }}</button>
-    </form>
+    <div style="display:flex;gap:10px;">
+      <form method="post" action="{{ url_for('run_now') }}">
+        <button type="submit" {% if run_status.running %}disabled{% endif %}>{{ 'Checking…' if run_status.running else 'Check now' }}</button>
+      </form>
+      <form method="post" action="{{ url_for('force_send') }}" onsubmit="return confirm('Send the full current digest to everyone now, even though nothing new was found?');">
+        <button type="submit" class="btn-secondary" {% if run_status.running %}disabled{% endif %}>Force send</button>
+      </form>
+    </div>
   </div>
   {% if run_status.output and not run_status.running %}
     <div class="run-output">{{ run_status.output }}</div>

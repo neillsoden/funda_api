@@ -29,7 +29,10 @@ from house_hunter.state import (  # noqa: E402
 from house_hunter.vrijescholen import nearest_vrijeschool  # noqa: E402
 
 
-def run() -> None:
+def run(force: bool = False) -> None:
+    """force=True sends the full current digest regardless of what's already
+    been notified (still excludes anything marked "not interested" - that
+    signal holds even on a forced send)."""
     config = load_config()
 
     with Funda() as client:
@@ -38,16 +41,21 @@ def run() -> None:
 
         events = classify_listings([(listing.id, listing.price.amount) for listing in listings if listing.id])
         rejected_ids = rejected_listing_ids([listing.id for listing in listings if listing.id])
-        notify_listings = [
-            listing for listing in listings if listing.id in events and listing.id not in rejected_ids
-        ]
-        new_count = sum(1 for e in events.values() if e == "new")
-        drop_count = sum(1 for e in events.values() if e == "price_drop")
-        skipped_rejected = sum(1 for listing in listings if listing.id in events and listing.id in rejected_ids)
-        print(f"{new_count} new, {drop_count} price drops, {skipped_rejected} skipped (marked not interested)")
+
+        if force:
+            notify_listings = [listing for listing in listings if listing.id not in rejected_ids]
+            print(f"Force send: {len(notify_listings)} listings (ignoring dedup)")
+        else:
+            notify_listings = [
+                listing for listing in listings if listing.id in events and listing.id not in rejected_ids
+            ]
+            new_count = sum(1 for e in events.values() if e == "new")
+            drop_count = sum(1 for e in events.values() if e == "price_drop")
+            skipped_rejected = sum(1 for listing in listings if listing.id in events and listing.id in rejected_ids)
+            print(f"{new_count} new, {drop_count} price drops, {skipped_rejected} skipped (marked not interested)")
 
         if not notify_listings:
-            print("Nothing new to send.")
+            print("Nothing to send.")
             return
 
         places = config["poi"]["places"]
@@ -125,7 +133,8 @@ def run() -> None:
     locations = ", ".join(cities) if cities else ", ".join(
         loc.title() for loc in config["search"]["locations"]
     )
-    title = f"House Hunter — {locations} (new matches)"
+    suffix = "full digest" if force else "new matches"
+    title = f"House Hunter — {locations} ({suffix})"
     public_base_url = config.get("server", {}).get("public_base_url", "")
     people = config.get("people", [])
     html = build_email_html(enriched, title, public_base_url, people)

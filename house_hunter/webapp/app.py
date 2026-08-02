@@ -64,17 +64,19 @@ OBJECT_TYPE_OPTIONS = ["house", "apartment"]
 _last_saved: str | None = None
 
 _run_lock = threading.Lock()
-_run_status: dict = {"running": False, "started_at": None, "finished_at": None, "output": None}
+_run_status: dict = {
+    "running": False, "started_at": None, "finished_at": None, "output": None, "forced": False,
+}
 
 
-def _run_pipeline_in_background() -> None:
+def _run_pipeline_in_background(force: bool = False) -> None:
     if not _run_lock.acquire(blocking=False):
         return  # a run is already in progress, ignore this trigger
-    _run_status.update(running=True, started_at=datetime.now(timezone.utc), output=None)
+    _run_status.update(running=True, started_at=datetime.now(timezone.utc), output=None, forced=force)
     buffer = io.StringIO()
     try:
         with redirect_stdout(buffer):
-            run_pipeline()
+            run_pipeline(force=force)
     except Exception as exc:  # noqa: BLE001 - surface any failure in the UI rather than losing it
         buffer.write(f"\nFAILED: {exc}")
     finally:
@@ -145,6 +147,16 @@ def form():
 def run_now():
     if not _run_status["running"]:
         threading.Thread(target=_run_pipeline_in_background, daemon=True).start()
+    return redirect(url_for("form"))
+
+
+@app.route("/force-send", methods=["POST"])
+@login_required
+def force_send():
+    """Sends the full current digest even if nothing's new - still excludes
+    anything marked "not interested"."""
+    if not _run_status["running"]:
+        threading.Thread(target=_run_pipeline_in_background, kwargs={"force": True}, daemon=True).start()
     return redirect(url_for("form"))
 
 
