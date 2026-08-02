@@ -65,6 +65,12 @@ def _to_int(value: str) -> int | None:
     return int(value) if value else None
 
 
+def _split_list(raw: str) -> list[str]:
+    """Accepts comma-separated (preferred, compact) or newline-separated input."""
+    parts = raw.replace("\n", ",").split(",")
+    return [part.strip() for part in parts if part.strip()]
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     next_url = request.values.get("next", "")
@@ -124,26 +130,14 @@ def save():
             errors.append(f"'{name}' must be a whole number")
             return None
 
-    locations = [
-        line.strip()
-        for line in form_data.get("locations", "").splitlines()
-        if line.strip()
-    ]
+    locations = _split_list(form_data.get("locations", ""))
 
-    to_addresses = [
-        line.strip()
-        for line in form_data.get("to_addresses", "").splitlines()
-        if line.strip()
-    ]
+    to_addresses = _split_list(form_data.get("to_addresses", ""))
     for address in to_addresses:
         if "@" not in address:
             errors.append(f"'{address}' does not look like a valid email address")
 
-    people = [
-        line.strip()
-        for line in form_data.get("people", "").splitlines()
-        if line.strip()
-    ]
+    people = _split_list(form_data.get("people", ""))
 
     places = []
     names = request.form.getlist("place_name")

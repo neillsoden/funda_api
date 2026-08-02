@@ -68,8 +68,8 @@
     input:focus, select:focus, textarea:focus {
       outline: none; border-color: var(--red); background: #fff; box-shadow: 0 0 0 4px rgba(255,45,32,0.10);
     }
-    .row { display: flex; gap: 16px; }
-    .row > div { flex: 1; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; }
+    .row > div { flex: 1; min-width: 140px; }
     button, .btn {
       display: inline-block; margin-top: 20px; padding: 11px 22px; font-size: 0.9rem; font-weight: 700;
       border-radius: 999px; border: none; background: var(--red); color: #fff; cursor: pointer;

@@ -29,10 +29,11 @@
   <form method="post" action="{{ url_for('save') }}">
     <div class="card">
     <h2>Search</h2>
-    <label for="locations">Locations (one city/region per line)</label>
-    <textarea id="locations" name="locations" rows="2">{{ config.search.locations|join('\n') }}</textarea>
-
     <div class="row">
+      <div>
+        <label for="locations">Locations</label>
+        <input type="text" id="locations" name="locations" value="{{ config.search.locations|join(', ') }}" placeholder="e.g. arnhem, nijmegen">
+      </div>
       <div>
         <label for="category">Category</label>
         <select id="category" name="category">
@@ -49,10 +50,6 @@
           {% endfor %}
         </select>
       </div>
-      <div>
-        <label for="radius_km">Search radius (km, optional)</label>
-        <input type="number" id="radius_km" name="radius_km" value="{{ config.search.radius_km if config.search.radius_km is not none else '' }}">
-      </div>
     </div>
 
     <div class="row">
@@ -64,26 +61,27 @@
         <label for="max_price">Max price (€)</label>
         <input type="number" id="max_price" name="max_price" value="{{ config.search.max_price if config.search.max_price is not none else '' }}">
       </div>
+      <div>
+        <label for="radius_km">Radius (km)</label>
+        <input type="number" id="radius_km" name="radius_km" value="{{ config.search.radius_km if config.search.radius_km is not none else '' }}">
+      </div>
     </div>
 
     <div class="row">
       <div>
-        <label for="min_bedrooms">Min bedrooms (slaapkamers)</label>
+        <label for="min_bedrooms">Min bedrooms</label>
         <input type="number" id="min_bedrooms" name="min_bedrooms" value="{{ config.search.min_bedrooms if config.search.min_bedrooms is not none else '' }}">
       </div>
       <div>
         <label for="max_bedrooms">Max bedrooms</label>
         <input type="number" id="max_bedrooms" name="max_bedrooms" value="{{ config.search.max_bedrooms if config.search.max_bedrooms is not none else '' }}">
       </div>
-    </div>
-
-    <div class="row">
       <div>
-        <label for="min_area">Min living area (m²)</label>
+        <label for="min_area">Min area (m²)</label>
         <input type="number" id="min_area" name="min_area" value="{{ config.search.min_area if config.search.min_area is not none else '' }}">
       </div>
       <div>
-        <label for="max_area">Max living area (m²)</label>
+        <label for="max_area">Max area (m²)</label>
         <input type="number" id="max_area" name="max_area" value="{{ config.search.max_area if config.search.max_area is not none else '' }}">
       </div>
     </div>
@@ -124,37 +122,40 @@
     </div>
     <button type="button" class="btn btn-secondary" onclick="addPlaceRow()">+ Add place</button>
 
-    <h2>Vrijeschool distance</h2>
+    <h2>Vrijeschool &amp; schedule</h2>
     <div class="card">
-    <p class="hint">Every listing is automatically checked against the nearest vrijeschool (from vrijescholen.nl), no address entry needed. Set a max biking distance below to exclude listings too far from any vrijeschool.</p>
-    <label for="max_school_distance_km">Max distance to nearest vrijeschool (km, biking distance)</label>
-    <input type="number" step="0.1" id="max_school_distance_km" name="max_school_distance_km" value="{{ config.search.max_school_distance_km if config.search.max_school_distance_km is not none else '' }}">
-    <p class="hint">Leave blank to not filter on this (distance will still be shown).</p>
+    <div class="row">
+      <div>
+        <label for="max_school_distance_km">Max distance to nearest vrijeschool (km, biking)</label>
+        <input type="number" step="0.1" id="max_school_distance_km" name="max_school_distance_km" value="{{ config.search.max_school_distance_km if config.search.max_school_distance_km is not none else '' }}">
+      </div>
+      <div>
+        <label for="frequency">Check frequency</label>
+        <select id="frequency" name="frequency">
+          {% for option in frequency_options %}
+            <option value="{{ option }}" {% if config.schedule.frequency == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <p class="hint">Every listing is automatically checked against the nearest vrijeschool (from vrijescholen.nl), no address entry needed. Leave distance blank to not filter on it (still shown either way).</p>
     </div>
 
-    <h2>Email</h2>
+    <h2>Email &amp; people</h2>
     <div class="card">
+    <div class="row">
+      <div>
+        <label for="to_addresses">Recipients</label>
+        <input type="text" id="to_addresses" name="to_addresses" value="{{ config.email.to_addresses|join(', ') }}" placeholder="e.g. you@example.com, partner@example.com">
+      </div>
+      <div>
+        <label for="people">Household members</label>
+        <input type="text" id="people" name="people" value="{{ config.people|join(', ') }}" placeholder="e.g. Neill, Yvonne">
+      </div>
+    </div>
     <label for="from_address">From address (optional, defaults to the SMTP username)</label>
     <input type="text" id="from_address" name="from_address" value="{{ config.email.from_address or '' }}">
-    <label for="to_addresses">Recipients (one email per line)</label>
-    <textarea id="to_addresses" name="to_addresses" rows="3">{{ config.email.to_addresses|join('\n') }}</textarea>
-    </div>
-
-    <h2>People</h2>
-    <div class="card">
-    <p class="hint">Names shown as separate "Favorite" buttons in each email (one per line). Everyone can see everyone else's favorites at <a href="/favorites">/favorites</a>.</p>
-    <label for="people">Household members (one name per line)</label>
-    <textarea id="people" name="people" rows="2">{{ config.people|join('\n') }}</textarea>
-    </div>
-
-    <h2>Schedule</h2>
-    <div class="card">
-    <label for="frequency">How often to check for new listings</label>
-    <select id="frequency" name="frequency">
-      {% for option in frequency_options %}
-        <option value="{{ option }}" {% if config.schedule.frequency == option %}selected{% endif %}>{{ option }}</option>
-      {% endfor %}
-    </select>
+    <p class="hint">Household member names become separate "Favorite" buttons in each email. Everyone can see everyone else's favorites at <a href="/favorites">/favorites</a>.</p>
     </div>
 
     <h2>Server</h2>
