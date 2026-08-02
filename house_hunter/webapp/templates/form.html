@@ -7,7 +7,14 @@
   .place-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
   .place-row label, .place-row-2 label { margin-top: 0; }
   .place-box .btn-remove { position: absolute; top: 12px; right: 12px; }
+  .run-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .run-card .status { font-size: 0.85rem; color: var(--gray-500); }
+  .run-card .status.running { color: var(--red); font-weight: 600; }
+  .run-output { margin-top: 14px; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px;
+    padding: 12px 14px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.78rem; color: var(--gray-600);
+    white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
 </style>
+{% if run_status.running %}<meta http-equiv="refresh" content="4">{% endif %}
 {% endblock %}
 {% block content %}
   <h1>Search Preferences</h1>
@@ -15,6 +22,25 @@
 
   {% if last_saved %}
     <p class="saved"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:3px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5l1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>Last saved: {{ last_saved }}</p>
+  {% endif %}
+
+  <div class="card run-card">
+    <div>
+      <strong>Force a check now</strong>
+      {% if run_status.running %}
+        <div class="status running">Checking Funda now — this page will refresh automatically…</div>
+      {% elif run_status.finished_at %}
+        <div class="status">Last manual check: {{ run_status.finished_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>
+      {% else %}
+        <div class="status">Runs the search right now instead of waiting for the schedule. Emails only if there's something new.</div>
+      {% endif %}
+    </div>
+    <form method="post" action="{{ url_for('run_now') }}">
+      <button type="submit" {% if run_status.running %}disabled{% endif %}>{{ 'Checking…' if run_status.running else 'Check now' }}</button>
+    </form>
+  </div>
+  {% if run_status.output and not run_status.running %}
+    <div class="run-output">{{ run_status.output }}</div>
   {% endif %}
 
   {% if errors %}

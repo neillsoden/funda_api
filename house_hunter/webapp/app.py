@@ -5,8 +5,11 @@ Reachable from the public internet (home.amglab.dev via nginx on the deploy
 box), so every route except /login requires a real session login.
 """
 
+import io
 import os
 import sys
+import threading
+from contextlib import redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -21,6 +24,7 @@ from funda import Funda, FundaError  # noqa: E402
 
 from house_hunter.config import load_config, save_config  # noqa: E402
 from house_hunter.poi import geocode_address  # noqa: E402
+from house_hunter.run import run as run_pipeline  # noqa: E402
 from house_hunter.state import (  # noqa: E402
     add_favorite,
     add_rejected,
@@ -58,6 +62,26 @@ CATEGORY_OPTIONS = ["buy", "rent"]
 OBJECT_TYPE_OPTIONS = ["house", "apartment"]
 
 _last_saved: str | None = None
+
+_run_lock = threading.Lock()
+_run_status: dict = {"running": False, "started_at": None, "finished_at": None, "output": None}
+
+
+def _run_pipeline_in_background() -> None:
+    if not _run_lock.acquire(blocking=False):
+        return  # a run is already in progress, ignore this trigger
+    _run_status.update(running=True, started_at=datetime.now(timezone.utc), output=None)
+    buffer = io.StringIO()
+    try:
+        with redirect_stdout(buffer):
+            run_pipeline()
+    except Exception as exc:  # noqa: BLE001 - surface any failure in the UI rather than losing it
+        buffer.write(f"\nFAILED: {exc}")
+    finally:
+        _run_status.update(
+            running=False, finished_at=datetime.now(timezone.utc), output=buffer.getvalue()
+        )
+        _run_lock.release()
 
 
 def _to_int(value: str) -> int | None:
@@ -111,8 +135,23 @@ def form():
         category_options=CATEGORY_OPTIONS,
         object_type_options=OBJECT_TYPE_OPTIONS,
         last_saved=_last_saved,
+        run_status=_run_status,
         errors=[],
     )
+
+
+@app.route("/run-now", methods=["POST"])
+@login_required
+def run_now():
+    if not _run_status["running"]:
+        threading.Thread(target=_run_pipeline_in_background, daemon=True).start()
+    return redirect(url_for("form"))
+
+
+@app.route("/run-status", methods=["GET"])
+@login_required
+def run_status():
+    return _run_status
 
 
 @app.route("/save", methods=["POST"])
@@ -337,4 +376,4 @@ if __name__ == "__main__":
     # 0.0.0.0 so it's reachable from outside a Docker container. debug=False is
     # required here: Werkzeug's debugger has no auth and is a known RCE risk if
     # exposed beyond localhost.
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
