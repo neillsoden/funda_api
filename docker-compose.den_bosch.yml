@@ -1,0 +1,30 @@
+# Optional Den Bosch instance. Bring it in alongside the main compose file with:
+#   docker compose -f docker-compose.yml -f docker-compose.den_bosch.yml up -d --build
+services:
+  house_hunter_den_bosch:
+    build:
+      context: .
+      dockerfile: Dockerfile.house_hunter
+    environment:
+      - HOUSE_HUNTER_INSTANCE=den_bosch
+    env_file:
+      - .env
+    volumes:
+      - ./config.den_bosch.json:/app/config.den_bosch.json
+      - ./state.den_bosch.sqlite:/app/state.den_bosch.sqlite
+    restart: unless-stopped
+
+  house_hunter_den_bosch_webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile.house_hunter
+    command: ["python", "house_hunter/webapp/app.py"]
+    environment:
+      - HOUSE_HUNTER_INSTANCE=den_bosch
+    env_file:
+      - .env
+    volumes:
+      - ./config.den_bosch.json:/app/config.den_bosch.json
+    ports:
+      - "5001:5000"
+    restart: unless-stopped

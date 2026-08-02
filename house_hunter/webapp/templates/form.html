@@ -14,8 +14,11 @@
     }
     .row { display: flex; gap: 16px; }
     .row > div { flex: 1; }
-    .poi-row { display: grid; grid-template-columns: 2fr 2fr 1fr 1fr auto; gap: 8px; align-items: end; margin-top: 8px; }
-    .poi-row label { margin-top: 0; }
+    .place-box { border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-top: 10px; position: relative; }
+    .place-row { display: grid; grid-template-columns: 1.5fr 2fr 1fr; gap: 8px; }
+    .place-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .place-row label, .place-row-2 label { margin-top: 0; }
+    .place-box .btn-remove { position: absolute; top: 10px; right: 10px; margin-top: 0; padding: 4px 10px; font-size: 0.8rem; }
     button, .btn { margin-top: 16px; padding: 8px 16px; font-size: 0.95rem; border-radius: 4px; border: 1px solid #333; background: #1a1a1a; color: white; cursor: pointer; }
     .btn-secondary { background: white; color: #1a1a1a; }
     .btn-remove { background: white; color: #a00; border-color: #a00; padding: 8px 10px; margin-top: 0; }
@@ -43,8 +46,8 @@
 
   <form method="post" action="{{ url_for('save') }}">
     <h2>Search</h2>
-    <label for="location">Location (city, postcode, or region)</label>
-    <input type="text" id="location" name="location" value="{{ config.search.location or '' }}" required>
+    <label for="locations">Locations (one city/region per line)</label>
+    <textarea id="locations" name="locations" rows="2">{{ config.search.locations|join('\n') }}</textarea>
 
     <div class="row">
       <div>
@@ -52,6 +55,14 @@
         <select id="category" name="category">
           {% for option in category_options %}
             <option value="{{ option }}" {% if config.search.category == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="object_type">Property type</label>
+        <select id="object_type" name="object_type">
+          {% for option in object_type_options %}
+            <option value="{{ option }}" {% if config.search.object_type == option %}selected{% endif %}>{{ option }}</option>
           {% endfor %}
         </select>
       </div>
@@ -74,7 +85,7 @@
 
     <div class="row">
       <div>
-        <label for="min_bedrooms">Min bedrooms</label>
+        <label for="min_bedrooms">Min bedrooms (slaapkamers)</label>
         <input type="number" id="min_bedrooms" name="min_bedrooms" value="{{ config.search.min_bedrooms if config.search.min_bedrooms is not none else '' }}">
       </div>
       <div>
@@ -94,33 +105,50 @@
       </div>
     </div>
 
-    <h2>Nearby places to check</h2>
-    <div id="poi-rows">
-      {% for poi in config.poi.types %}
-        <div class="poi-row">
-          <div>
-            <label>Name</label>
-            <input type="text" name="poi_key" value="{{ poi.key }}" placeholder="e.g. school">
-          </div>
-          <div>
-            <label>Google Place type</label>
-            <input type="text" name="poi_google_place_type" value="{{ poi.google_place_type }}" placeholder="e.g. school">
-          </div>
-          <div>
-            <label>Max results</label>
-            <input type="number" name="poi_max_results" value="{{ poi.max_results }}">
-          </div>
-          <div>
-            <label>Max radius (m)</label>
-            <input type="number" name="poi_max_radius_m" value="{{ poi.max_radius_m }}">
-          </div>
+    <h2>Places to measure distance to</h2>
+    <p class="hint">e.g. a train station or other fixed landmark. (Vrijeschool distance is automatic now — see below, no need to add it here.) Set city to scope a place to listings in that city only (e.g. so "Arnhem Centraal" doesn't show on Nijmegen listings) — leave city blank to apply everywhere. Leave lat/lng blank and it will be geocoded from the address on save (requires GOOGLE_PLACES_API_KEY in .env).</p>
+    <div id="place-rows">
+      {% for place in config.poi.places %}
+        <div class="place-box">
           <button type="button" class="btn-remove" onclick="this.parentElement.remove()">Remove</button>
+          <div class="place-row">
+            <div>
+              <label>Name</label>
+              <input type="text" name="place_name" value="{{ place.name }}" placeholder="e.g. Arnhem Centraal">
+            </div>
+            <div>
+              <label>Address</label>
+              <input type="text" name="place_address" value="{{ place.address }}" placeholder="street, postcode, city">
+            </div>
+            <div>
+              <label>City (optional scope)</label>
+              <input type="text" name="place_city" value="{{ place.city or '' }}" placeholder="e.g. Arnhem">
+            </div>
+          </div>
+          <div class="place-row-2">
+            <div>
+              <label>Lat</label>
+              <input type="text" name="place_lat" value="{{ place.lat }}">
+            </div>
+            <div>
+              <label>Lng</label>
+              <input type="text" name="place_lng" value="{{ place.lng }}">
+            </div>
+          </div>
         </div>
       {% endfor %}
     </div>
-    <button type="button" class="btn btn-secondary" onclick="addPoiRow()">+ Add place type</button>
+    <button type="button" class="btn btn-secondary" onclick="addPlaceRow()">+ Add place</button>
+
+    <h2>Vrijeschool distance</h2>
+    <p class="hint">Every listing is automatically checked against the nearest vrijeschool (from vrijescholen.nl), no address entry needed. Set a max biking distance below to exclude listings too far from any vrijeschool.</p>
+    <label for="max_school_distance_km">Max distance to nearest vrijeschool (km, biking distance)</label>
+    <input type="number" step="0.1" id="max_school_distance_km" name="max_school_distance_km" value="{{ config.search.max_school_distance_km if config.search.max_school_distance_km is not none else '' }}">
+    <p class="hint">Leave blank to not filter on this (distance will still be shown).</p>
 
     <h2>Email</h2>
+    <label for="from_address">From address (optional, defaults to the SMTP username)</label>
+    <input type="text" id="from_address" name="from_address" value="{{ config.email.from_address or '' }}">
     <label for="to_addresses">Recipients (one email per line)</label>
     <textarea id="to_addresses" name="to_addresses" rows="3">{{ config.email.to_addresses|join('\n') }}</textarea>
 
@@ -132,23 +160,33 @@
       {% endfor %}
     </select>
 
+    <h2>Server</h2>
+    <label for="public_base_url">Public URL of this webapp (for email click tracking)</label>
+    <input type="text" id="public_base_url" name="public_base_url" value="{{ config.server.public_base_url or '' }}" placeholder="e.g. https://house.example.com">
+    <p class="hint">Leave blank while running on localhost only — links in emails go straight to Funda and clicks aren't tracked. Set this once the webapp is deployed somewhere reachable, and future email links will route through here first to record "already viewed" listings.</p>
+
     <br>
     <button type="submit">Save preferences</button>
   </form>
 
   <script>
-    function addPoiRow() {
-      const container = document.getElementById('poi-rows');
-      const row = document.createElement('div');
-      row.className = 'poi-row';
-      row.innerHTML = `
-        <div><label>Name</label><input type="text" name="poi_key" placeholder="e.g. supermarket"></div>
-        <div><label>Google Place type</label><input type="text" name="poi_google_place_type" placeholder="e.g. supermarket"></div>
-        <div><label>Max results</label><input type="number" name="poi_max_results" value="3"></div>
-        <div><label>Max radius (m)</label><input type="number" name="poi_max_radius_m" value="2000"></div>
+    function addPlaceRow() {
+      const container = document.getElementById('place-rows');
+      const box = document.createElement('div');
+      box.className = 'place-box';
+      box.innerHTML = `
         <button type="button" class="btn-remove" onclick="this.parentElement.remove()">Remove</button>
+        <div class="place-row">
+          <div><label>Name</label><input type="text" name="place_name" placeholder="e.g. Nijmegen Centraal"></div>
+          <div><label>Address</label><input type="text" name="place_address" placeholder="street, postcode, city"></div>
+          <div><label>City (optional scope)</label><input type="text" name="place_city" placeholder="e.g. Nijmegen"></div>
+        </div>
+        <div class="place-row-2">
+          <div><label>Lat</label><input type="text" name="place_lat"></div>
+          <div><label>Lng</label><input type="text" name="place_lng"></div>
+        </div>
       `;
-      container.appendChild(row);
+      container.appendChild(box);
     }
   </script>
 </body>

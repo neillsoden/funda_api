@@ -1,53 +1,82 @@
-"""Load/save the house_hunter config.json."""
+"""Load/save the house_hunter config.json.
+
+Supports multiple independent instances (one per city/region), each with its
+own config + state file, selected via HOUSE_HUNTER_INSTANCE. e.g.
+HOUSE_HUNTER_INSTANCE=den_bosch uses config.den_bosch.json / state.den_bosch.sqlite
+instead of the default config.json / state.sqlite.
+"""
 
 import json
+import os
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
+_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _instance_suffix() -> str:
+    instance = os.environ.get("HOUSE_HUNTER_INSTANCE", "").strip()
+    return f".{instance}" if instance else ""
+
+
+def config_path() -> Path:
+    return _ROOT / f"config{_instance_suffix()}.json"
+
+
+def state_path() -> Path:
+    return _ROOT / f"state{_instance_suffix()}.sqlite"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "search": {
-        "location": "amsterdam",
+        "locations": ["amsterdam"],
         "category": "buy",
+        "object_type": "house",
         "min_price": None,
         "max_price": 500000,
-        "min_bedrooms": None,
+        # Max mortgage capacity by the property's own energy label (better label
+        # -> lower interest -> higher capacity), from the mortgage advisor.
+        # Overrides max_price when set.
+        "mortgage_budget": {},
+        "min_bedrooms": 3,
         "max_bedrooms": None,
         "min_area": None,
         "max_area": None,
         "radius_km": None,
+        # Max biking distance (km) to the nearest vrijeschool (vrijescholen.nl).
+        # Listings farther than this are excluded entirely. None = no filter.
+        "max_school_distance_km": None,
     },
     "poi": {
-        "types": [
-            {
-                "key": "school",
-                "google_place_type": "school",
-                "max_results": 3,
-                "max_radius_m": 2000,
-            },
-            {
-                "key": "train_station",
-                "google_place_type": "train_station",
-                "max_results": 2,
-                "max_radius_m": 3000,
-            },
-        ]
+        # Fixed named places to compute distance to (geocoded once, cached here).
+        "places": [],
+        # Nearest place of a given Google Places type, looked up fresh per listing
+        # (e.g. the closest train station, whichever one that turns out to be).
+        "nearest_types": [
+            {"key": "train_station", "google_place_type": "train_station", "label": "Nearest train station"}
+        ],
     },
     "email": {
+        "from_address": "",
         "to_addresses": [],
     },
     "schedule": {
         "frequency": "daily",
     },
+    "server": {
+        # Public base URL of the deployed webapp, e.g. "https://house.example.com".
+        # Required for click tracking (email links route through /click here) -
+        # leave blank and emails link straight to Funda instead.
+        "public_base_url": "",
+    },
 }
 
 
 def load_config() -> dict[str, Any]:
-    if not CONFIG_PATH.exists():
+    path = config_path()
+    if not path.exists():
         return deepcopy(DEFAULT_CONFIG)
-    with CONFIG_PATH.open("r", encoding="utf-8") as f:
+    with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
     merged = deepcopy(DEFAULT_CONFIG)
     _deep_update(merged, data)
@@ -55,7 +84,7 @@ def load_config() -> dict[str, Any]:
 
 
 def save_config(config: dict[str, Any]) -> None:
-    with CONFIG_PATH.open("w", encoding="utf-8") as f:
+    with config_path().open("w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
         f.write("\n")
 

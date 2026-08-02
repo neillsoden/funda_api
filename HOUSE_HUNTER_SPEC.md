@@ -1,109 +1,107 @@
-# House Hunter — Spec & Phases
+# House Hunter — Status
 
 ## Goal
 
-A scheduled job that:
-1. Pulls listings from Funda (via `pyfunda`) matching a region + spec (price, bedrooms, size, etc.)
-2. For each new listing, looks up nearby points of interest (schools, train stations, and others we add later) via Google Places
-3. Emails the listing — photo, key details, and the nearby POIs — to you and your wife
-4. Never emails the same listing twice
+A job that:
+1. Pulls listings from Funda (via `pyfunda`) matching a region + spec (price, bedrooms, size, energy label, mortgage budget)
+2. Enriches each new/changed listing with real biking distances (vrijeschool, station, landmarks), neighbourhood market data, recently sold comparables, and mortgage-budget fit
+3. Emails matches — photo, key details, all enrichment — to the household
+4. Tracks what's already been sent, and re-alerts on asking-price drops
+5. Runs as multiple independent instances, one per city/region
 
-## Architecture
+## Multi-instance setup
 
-```
-config.yaml          # region, spec filters, POI types/radii, email addresses, schedule
-state.sqlite          # listing IDs already emailed (dedup)
-house_hunter/
-  search.py           # wraps pyfunda: fetch listings matching config
-  poi.py               # Google Places lookups (schools, stations, distance)
-  email.py             # builds + sends the HTML email via SMTP
-  state.py             # sqlite read/write of "already sent" listing IDs
-  run.py               # orchestrates: search -> filter new -> enrich -> email -> record
-.github/workflows or cron / launchd  # the scheduler
-```
+Each city/region is a fully independent instance: its own config file and its own dedup database, selected via the `HOUSE_HUNTER_INSTANCE` env var.
 
-**Flow per run (`run.py`):**
-1. Load config (region, filters, POI settings, recipients).
-2. `pyfunda` search → list of `Listing` objects matching spec.
-3. Diff against `state.sqlite` → keep only unseen `global_id`s.
-4. For each new listing: reverse-geocode/lookup nearby POIs from its `GeoLocation` (lat/lon) via Google Places (Nearby Search, ranked by distance) for each POI type (school, train_station, ...), keeping the closest N per type with walking/driving distance.
-5. Render one email per listing (or a daily digest — see Phase 2 decision) with photo, price, address, key specs, and POI list with distances.
-6. Send via SMTP to both addresses.
-7. Record `global_id` in `state.sqlite` so it's never sent again.
+| Instance | Config | State DB | Recipients |
+|---|---|---|---|
+| Arnhem (default) | `config.json` | `state.sqlite` | ns@neillsoden.co.za, yvonnesoden@ytje.co.za |
+| Den Bosch | `config.den_bosch.json` | `state.den_bosch.sqlite` | ns@neillsoden.co.za |
 
-## Config surface (`config.json`)
+Run any instance: `HOUSE_HUNTER_INSTANCE=<name> uv run python -m house_hunter.run` (omit the env var for the default/Arnhem instance). Same pattern for the web form. Adding a new city is just a new `config.<name>.json` file, following the Den Bosch one as a template — no code changes needed.
 
-Stored as plain JSON on disk, read by `run.py` on every scheduled run:
+Both current instances: buy, houses only, min 3 bedrooms, €300k–€410k fallback cap, same mortgage-budget table (A €410,000 / B €406,600 / C €399,200 / D €398,700 / E–F €392,250), 5km vrijeschool biking-distance threshold (primary sort, not a hard cutoff — farther listings still show, just lower and badged "outside").
 
-```json
-{
-  "search": {
-    "location": "amsterdam",
-    "max_price": 500000,
-    "min_bedrooms": 3
-  },
-  "poi": {
-    "types": [
-      { "key": "school", "google_place_type": "school", "max_results": 3, "max_radius_m": 2000 },
-      { "key": "train_station", "google_place_type": "train_station", "max_results": 2, "max_radius_m": 3000 }
-    ]
-  },
-  "email": {
-    "to_addresses": ["you@example.com", "wife@example.com"]
-  },
-  "schedule": {
-    "frequency": "daily"
-  }
-}
+Nijmegen was removed from the Arnhem instance's `locations` (was combined before) — not yet rebuilt as its own instance.
+
+## Deployment target
+
+**LAN-only** — will run on `192.168.178.6`, not exposed to the internet. This simplifies things: no HTTPS/domain/reverse-proxy needed, and the webapp's lack of authentication is a much smaller concern since only devices on the home network can reach it.
+
+**Scoped to Arnhem only for the initial deployment** (Neill's choice, 2026-08-02) — `docker-compose.yml` currently only defines the Arnhem services:
+
+| Service | Purpose | Port on 192.168.178.6 |
+|---|---|---|
+| `house_hunter_arnhem` | Arnhem scheduler loop (checks daily, only emails on new/changed listings) | — |
+| `house_hunter_arnhem_webapp` | Arnhem config form | 5000 |
+
+Den Bosch is fully built and tested (manually run, emails sent successfully) but deliberately **not** in the main compose file yet. Its services live in `docker-compose.den_bosch.yml` and can be added alongside the Arnhem deployment whenever wanted:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.den_bosch.yml up -d --build
 ```
 
-Secrets (SMTP password/app password, Google Places API key) go in environment variables / `.env`, never in `config.json`, and are **not** editable from the web form below.
+`config.json`'s `server.public_base_url` is already set to `http://192.168.178.6:5000`, so click tracking activates automatically the moment this is deployed there — no further config changes needed at deploy time.
 
-## Config web form
+Deploy steps on that box (Arnhem only):
+```bash
+git clone https://github.com/neillsoden/funda_api.git && cd funda_api
+cp .env.example .env   # fill in real Google/Mailgun keys
+touch state.sqlite   # must exist before the bind-mount
+docker compose up -d --build
+```
 
-A small local web app so both of you can edit `config.json` without touching a text editor.
+**I (Claude) do not have SSH/remote access to 192.168.178.6** — these are prepared files for Neill to run there himself; I can't deploy this directly.
 
-- **Stack**: Flask (single `app.py`), one HTML template (Jinja2 + plain CSS, no JS framework needed), no database — it reads/writes `config.json` directly.
-- **Fields**: location, min/max price, bedrooms, size; a repeatable POI section (type, max results, max radius); the two recipient email addresses; schedule frequency.
-- **Behavior**: GET `/` renders the form pre-filled from the current `config.json`; POST validates and overwrites `config.json`; a "last saved" timestamp shown on the page confirms the write. Save triggers no immediate search run — the next scheduled run just picks up the new config.
-- **Access**: runs on `localhost` (e.g. `python app.py` → `http://localhost:5000`), started manually when either of you wants to tweak preferences. No auth needed since it's local-only; not exposed to the internet.
-- **Where it lives**: `house_hunter/webapp/` (`app.py`, `templates/form.html`), separate from the scheduled `run.py` so the scheduler doesn't depend on Flask running.
+## What's built and working
 
-## Phases
+**Package layout** (`house_hunter/`):
+- `config.py` — loads/saves per-instance config with sane defaults; `config_path()`/`state_path()` resolve the right files based on `HOUSE_HUNTER_INSTANCE`
+- `search.py` — multi-location Funda search, energy-label-aware mortgage budget filter, and a status safety-net that drops anything not `available`/`negotiations` (excludes sold, and "Verkocht onder voorbehoud" / under offer)
+- `state.py` — SQLite `tracked_listings` table (new vs. price-drop detection) and `clicks` table (click tracking, see below)
+- `poi.py` — geocoding, real travel distance/time via the **Routes API** (`computeRouteMatrix`, driving or bicycling) with straight-line haversine fallback, nearest-place-of-type search (Google Places, used for "nearest train station")
+- `vrijescholen.py` — automatic nearest-vrijeschool lookup. Full directory (152 schools, vrijescholen.nl's public API) is cached in a `vrijescholen` table in state.sqlite and refreshed at most once every 30 days — normal runs hit the local table only, no API call
+- `market.py` — neighbourhood market insights (avg asking €/m²) via pyfunda, cached per run
+- `comparables.py` — recently sold nearby properties via pyfunda's `similar_listings`
+- `pricing.py` — prior "sold" price/date from pyfunda's price history (**see caveat below** — this is not the real transaction price)
+- `email_report.py` — HTML digest: card-per-listing with a "NEW" badge on the photo corner for genuinely new listings, solid color-coded energy pill (A++++ through G, contrast-aware text), Material Icon chips grouped into sections, every distance chip is a clickable Google Maps directions link in the correct travel mode, price-drop banner, recently-sold mini-panel, mortgage-budget-fit chip, green/amber/red left-accent border scaled to vrijeschool proximity, "Previously viewed" badge, mobile-safe spacing (explicit spacer rows, not CSS margin)
+- `run.py` — orchestrates: search → classify new/price-drop → enrich (POI, school, market, comps, budget, click history) → sort (within school-distance budget first) → build + send email → record state
+- `scheduler.py` — loop that calls `run()` then sleeps per `config.schedule.frequency`, for the eventual Docker deployment
+- `webapp/` — local Flask form to edit a config (locations, price/bedroom/area filters, fixed places with optional city-scoping, max school distance, recipients, schedule, public base URL), plus the `/click/<id>` redirect-and-log endpoint for click tracking
 
-### Phase 0 — Setup
-- `uv sync` the pyfunda dev environment, confirm `client.search(...)` and `client.listing(...)` work end-to-end against a real region.
-- Get a Google Places API key (Places API enabled) and a Gmail app password (or other SMTP creds).
-- Build the config web form (see above) and use it to fill in the first real `config.json` — region, price range, bedrooms, POI settings, both recipient addresses.
+**Infrastructure**:
+- `Dockerfile.house_hunter` + `docker-compose.yml` — four services (scheduler + webapp × 2 instances), config/state/`.env` mounted from outside the image, see Deployment target above
+- `.env` / `.env.example` — Google Places/Geocoding/Routes API key, Mailgun SMTP creds; gitignored along with all `config*.json` and `state*.sqlite` files
+- Repo pushed to `github.com/neillsoden/funda_api` (pyfunda upstream kept as a separate `upstream` remote)
+- Fixed a real security issue before this goes anywhere public: Flask's `debug=True` (RCE risk if network-exposed) is off
+- Click tracking is **built and configured, but not yet live**: `server.public_base_url` is set in both configs pointing at the LAN deployment target, but until that box is actually running the webapp, links still go straight to Funda/Maps (there's nothing to route through yet)
 
-### Phase 1 — Core search + dedup (no email yet)
-- `house_hunter/search.py`: wraps `Funda.search()`/`iter_search()` with the config filters, returns `Listing` objects.
-- `house_hunter/state.py`: SQLite table `sent_listings(global_id INTEGER PRIMARY KEY, sent_at TEXT)`.
-- `run.py` v1: search → diff against state → print new matches to console (no email, no POIs yet). Verify it correctly finds new listings and doesn't re-show old ones on a second run.
+**Verified live**: search + mortgage-budget + sold-status filtering, per-city nearest vrijeschool with persistent caching, real bike distance/time to school/station/landmarks via Routes API, clickable Maps directions links, NEW badge, energy label colors, multi-instance isolation (Arnhem and Den Bosch run and email independently without interfering with each other's dedup state).
 
-### Phase 2 — POI enrichment
-- `house_hunter/poi.py`: given a listing's lat/lon (`Listing.address.geo` or similar — confirm the field on `Listing`), call Google Places Nearby Search per configured POI type, compute distance (haversine or Google's returned distance), return top N per type.
-- Wire into `run.py`: attach POI results to each new listing before the print step. Verify against a couple of known Amsterdam addresses that results look sane (right school, right station).
+## Known caveat — "last sold" price is not the real transaction price
 
-### Phase 3 — Email delivery
-- `house_hunter/email.py`: HTML email template — listing photo (main image from `Listing.media`), title/address/price, a few key specs (size, rooms, year), POI list with distances, and a link back to the Funda listing.
-- SMTP send via `smtplib` + `ssl`, using app-password auth.
-- Wire into `run.py`: replace the console print with an actual send; on successful send, write to `state.sqlite`.
-- Test with one deliberately-triggered listing to confirm formatting/deliverability (check spam folder too).
+Confirmed by inspecting Funda's own price-history data: the "Verkocht" (sold) entry and the "Vraagprijs" (asking) entry immediately before it always show the **same number**. Funda doesn't capture the actual negotiated/paid price — it just relabels the last asking price as "sold." The real number lives at the **Kadaster** (Dutch land registry), which isn't free to query per-address.
+→ **Not yet fixed**: still deciding whether to (a) relabel the field honestly as "last asking price," or (b) wire up a paid Kadaster lookup for the real figure.
 
-### Phase 4 — Scheduling
-- Decide host: local machine (cron/launchd) vs. small always-on box/cloud (GitHub Actions scheduled workflow is a free, simple option since no server is needed).
-- Wire up the chosen scheduler to run `run.py` daily (or whatever cadence you pick).
-- Make failures visible — e.g. the job should not fail silently if Funda or Google Places changes/breaks (pyfunda's own README flags its endpoints as undocumented and liable to change).
+## What's left
 
-### Phase 5 — Polish (optional, later)
-- Digest mode: batch all new matches from a run into a single email instead of one-per-listing.
-- More POI types (supermarket, park, gym) — just config additions given Phase 2's design.
-- Simple "why this matched" / score in the email (e.g. under budget by X%, N min to nearest station).
-- Unsubscribe/pause switch without deleting state.
+1. **Relabel or fix the sold-price field** (see caveat above) — undecided.
+2. **Actually run `docker compose up -d --build` on 192.168.178.6** — files are ready and Arnhem-scoped (see Deployment target above); Neill needs to run this himself, I don't have remote access to that box.
+3. **Add Den Bosch to the live deployment** — whenever wanted, via `docker-compose.den_bosch.yml` on top of the main compose file (see above). Fully built/tested already, just deliberately excluded from today's initial deploy.
+4. **NS (Nederlandse Spoorwegen) API** — discussed as a better source than Google for real train stations/journey times; needs an NS API subscription key, not built.
+5. **Real favorite/star button in emails** — different from click tracking ("previously viewed" already works); an actual favorite action needs its own endpoint + table. Not started.
+6. **Mortgage budget table isn't editable via the web form** — hand-edit the config file directly for now; the form no longer wipes it on save, but there's no UI for it.
+7. **Webapp has no authentication** — low priority now (LAN-only), but still worth addressing before any public/internet exposure.
+8. **Nijmegen instance** — removed from Arnhem's config, not yet rebuilt as its own `config.nijmegen.json` (same 2-minute process as Den Bosch, just say the word).
+9. Suggested-but-not-built: price-per-m² ranking across a whole digest, broker info/reviews, contact-form availability flag, instant alerts via `new_listings()` polling instead of periodic runs, lightweight per-listing status (viewed/contacted/rejected) as a mini CRM.
 
-## Open items to confirm before Phase 0 build starts
-- Region/location string(s) and full filter spec (price, bedrooms, size, property type) — `pyfunda`'s `search()` kwargs need to be checked against `funda/search.py` for exact filter names.
-- Confirm `Listing` actually exposes lat/lon coordinates (`GeoLocation` in `funda/listing.py`) — needed for Phase 2.
-- Google Places API billing is pay-as-you-go past a free tier; fine at this run frequency/volume but worth knowing.
-- Where this runs long-term (Phase 4) affects how secrets are stored (local `.env` vs. GitHub Actions secrets).
+## Verification
+
+Run any instance manually:
+```bash
+uv run python -m house_hunter.run                              # default (Arnhem)
+HOUSE_HUNTER_INSTANCE=den_bosch uv run python -m house_hunter.run
+```
+Edit preferences locally:
+```bash
+uv run python house_hunter/webapp/app.py   # http://localhost:5000
+```
