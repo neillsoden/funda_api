@@ -69,7 +69,10 @@ def find_matching_listings(client: Funda, config: dict) -> list[Listing]:
 
     ids: list[str] = []
     for location in search_cfg["locations"]:
-        results = client.search(location, **kwargs)
+        # iter_search walks every page until exhausted - plain search() only
+        # returns the first page (15 results), silently missing anything
+        # beyond that when a location/filter combo matches more than 15.
+        results = client.iter_search(location, **kwargs)
         ids.extend(listing.id for listing in results if listing.id)
 
     unique_ids = list(dict.fromkeys(ids))
