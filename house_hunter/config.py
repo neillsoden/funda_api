@@ -15,17 +15,27 @@ from typing import Any
 _ROOT = Path(__file__).resolve().parent.parent
 
 
+def _data_dir() -> Path:
+    # In Docker this points at a bind-mounted directory (set via
+    # HOUSE_HUNTER_DATA_DIR). Deliberately a directory, not individual file
+    # mounts: SQLite's atomic rename-based commits break single-file bind
+    # mounts (the container ends up writing to a new inode the host mount
+    # no longer tracks, so writes silently don't appear on the host).
+    override = os.environ.get("HOUSE_HUNTER_DATA_DIR", "").strip()
+    return Path(override) if override else _ROOT
+
+
 def _instance_suffix() -> str:
     instance = os.environ.get("HOUSE_HUNTER_INSTANCE", "").strip()
     return f".{instance}" if instance else ""
 
 
 def config_path() -> Path:
-    return _ROOT / f"config{_instance_suffix()}.json"
+    return _data_dir() / f"config{_instance_suffix()}.json"
 
 
 def state_path() -> Path:
-    return _ROOT / f"state{_instance_suffix()}.sqlite"
+    return _data_dir() / f"state{_instance_suffix()}.sqlite"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "search": {

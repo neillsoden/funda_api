@@ -1,5 +1,7 @@
 # Optional Den Bosch instance. Bring it in alongside the main compose file with:
 #   docker compose -f docker-compose.yml -f docker-compose.den_bosch.yml up -d --build
+# Shares ./data with the Arnhem instance - safe, since HOUSE_HUNTER_INSTANCE
+# gives each instance distinct filenames (config.den_bosch.json etc) within it.
 services:
   house_hunter_den_bosch:
     build:
@@ -7,11 +9,11 @@ services:
       dockerfile: Dockerfile.house_hunter
     environment:
       - HOUSE_HUNTER_INSTANCE=den_bosch
+      - HOUSE_HUNTER_DATA_DIR=/app/data
     env_file:
       - .env
     volumes:
-      - ./config.den_bosch.json:/app/config.den_bosch.json
-      - ./state.den_bosch.sqlite:/app/state.den_bosch.sqlite
+      - ./data:/app/data
     restart: unless-stopped
 
   house_hunter_den_bosch_webapp:
@@ -21,10 +23,11 @@ services:
     command: ["python", "house_hunter/webapp/app.py"]
     environment:
       - HOUSE_HUNTER_INSTANCE=den_bosch
+      - HOUSE_HUNTER_DATA_DIR=/app/data
     env_file:
       - .env
     volumes:
-      - ./config.den_bosch.json:/app/config.den_bosch.json
+      - ./data:/app/data
     ports:
       - "5011:5000"
     restart: unless-stopped

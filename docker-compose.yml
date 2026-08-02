@@ -3,11 +3,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.house_hunter
+    environment:
+      - HOUSE_HUNTER_DATA_DIR=/app/data
     env_file:
       - .env
     volumes:
-      - ./config.json:/app/config.json
-      - ./state.sqlite:/app/state.sqlite
+      - ./data:/app/data
     restart: unless-stopped
 
   house_hunter_arnhem_webapp:
@@ -15,10 +16,12 @@ services:
       context: .
       dockerfile: Dockerfile.house_hunter
     command: ["python", "house_hunter/webapp/app.py"]
+    environment:
+      - HOUSE_HUNTER_DATA_DIR=/app/data
     env_file:
       - .env
     volumes:
-      - ./config.json:/app/config.json
+      - ./data:/app/data
     ports:
       - "5010:5000"
     restart: unless-stopped
