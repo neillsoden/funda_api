@@ -76,6 +76,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "people": [],
     "schedule": {
         "frequency": "daily",
+        # Fixed clock times to check each day, e.g. ["11:00", "21:00"] for
+        # twice daily. Takes priority over "frequency" when set; leave empty
+        # to fall back to the simple repeating-interval behavior.
+        "times": [],
+        "timezone": "Europe/Amsterdam",
     },
     "server": {
         # Public base URL of the deployed webapp, e.g. "https://house.example.com".

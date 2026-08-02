@@ -161,7 +161,7 @@
         <input type="number" step="0.1" id="max_school_distance_km" name="max_school_distance_km" value="{{ config.search.max_school_distance_km if config.search.max_school_distance_km is not none else '' }}">
       </div>
       <div>
-        <label for="frequency">Check frequency</label>
+        <label for="frequency">Check frequency (fallback if no fixed times below)</label>
         <select id="frequency" name="frequency">
           {% for option in frequency_options %}
             <option value="{{ option }}" {% if config.schedule.frequency == option %}selected{% endif %}>{{ option }}</option>
@@ -169,7 +169,17 @@
         </select>
       </div>
     </div>
-    <p class="hint">Every listing is automatically checked against the nearest vrijeschool (from vrijescholen.nl), no address entry needed. Leave distance blank to not filter on it (still shown either way).</p>
+    <div class="row">
+      <div>
+        <label for="times">Fixed check times (24h, local time)</label>
+        <input type="text" id="times" name="times" value="{{ config.schedule.times|join(', ') }}" placeholder="e.g. 11:00, 21:00">
+      </div>
+      <div>
+        <label for="timezone">Timezone</label>
+        <input type="text" id="timezone" name="timezone" value="{{ config.schedule.timezone }}">
+      </div>
+    </div>
+    <p class="hint">Every listing is automatically checked against the nearest vrijeschool (from vrijescholen.nl), no address entry needed. Leave school distance blank to not filter on it (still shown either way). Set fixed times to check at specific times every day (e.g. "11:00, 21:00") — takes priority over the frequency dropdown above; leave blank to just use the simple interval instead.</p>
     </div>
 
     <h2>Email &amp; people</h2>

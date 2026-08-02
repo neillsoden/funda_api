@@ -228,6 +228,16 @@ def save():
         errors.append("'max_school_distance_km' must be a number")
         max_school_distance_km = None
 
+    times = _split_list(form_data.get("times", ""))
+    for time_str in times:
+        parts = time_str.split(":")
+        valid = len(parts) == 2 and all(part.isdigit() for part in parts)
+        if valid:
+            hour, minute = int(parts[0]), int(parts[1])
+            valid = 0 <= hour <= 23 and 0 <= minute <= 59
+        if not valid:
+            errors.append(f"'{time_str}' is not a valid 24h time (expected HH:MM)")
+
     # mortgage_budget has no form field yet (edit config.json directly for now) -
     # carry the existing value through so saving the form doesn't wipe it out.
     existing_mortgage_budget = load_config()["search"].get("mortgage_budget") or {}
@@ -253,7 +263,11 @@ def save():
             "to_addresses": to_addresses,
         },
         "people": people,
-        "schedule": {"frequency": form_data.get("frequency", "daily")},
+        "schedule": {
+            "frequency": form_data.get("frequency", "daily"),
+            "times": times,
+            "timezone": form_data.get("timezone", "Europe/Amsterdam").strip() or "Europe/Amsterdam",
+        },
         "server": {"public_base_url": form_data.get("public_base_url", "").strip().rstrip("/")},
     }
 

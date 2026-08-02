@@ -46,6 +46,7 @@ dependencies = [
     "curl-cffi>=0.14.0",
     "tls-client>=1.0.1",
     "typing_extensions>=4.0.0",
+    "tzdata>=2026.3",
 ]
 
 [project.urls]
