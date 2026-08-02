@@ -6,6 +6,7 @@ import ssl
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from email.message import EmailMessage
+from email.utils import formataddr
 from urllib.parse import quote
 
 from funda import Listing
@@ -430,7 +431,7 @@ def send_email(subject: str, html: str, to_addresses: list[str]) -> None:
 
     msg = EmailMessage()
     msg["Subject"] = subject
-    msg["From"] = from_address
+    msg["From"] = formataddr(("Home Hunter Agent", from_address))
     msg["To"] = ", ".join(to_addresses)
     msg.set_content("This email requires an HTML-capable client to view listings.")
     msg.add_alternative(html, subtype="html")
