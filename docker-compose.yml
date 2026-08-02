@@ -20,5 +20,5 @@ services:
     volumes:
       - ./config.json:/app/config.json
     ports:
-      - "5000:5000"
+      - "5010:5000"
     restart: unless-stopped
