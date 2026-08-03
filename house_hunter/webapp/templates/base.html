@@ -59,21 +59,30 @@
     h2 { font-size: 1.05rem; font-weight: 700; margin-top: 2.2rem; padding-bottom: 10px; border-bottom: 1px solid var(--gray-200); }
     .hint { font-size: 0.85rem; color: var(--gray-500); margin-top: 2px; }
     .card { background: #ffffff; border: 1px solid var(--gray-200); border-radius: 18px; box-shadow: 0 1px 2px rgba(23,22,26,0.03); padding: 22px; margin-bottom: 16px; }
-    label { display: block; font-size: 0.82rem; font-weight: 700; color: var(--ink); margin-top: 16px; margin-bottom: 6px; }
+    label { display: block; font-size: 0.76rem; font-weight: 700; color: var(--ink); margin-top: 14px; margin-bottom: 5px; }
     input[type=text], input[type=number], input[type=password], select, textarea {
-      width: 100%; padding: 11px 13px; box-sizing: border-box; font-size: 0.95rem;
-      border: 1.5px solid var(--gray-200); border-radius: 12px; background: var(--gray-50);
+      width: 100%; height: 38px; padding: 0 12px; box-sizing: border-box; font-size: 0.88rem;
+      border: 1.5px solid var(--gray-200); border-radius: 9px; background: var(--gray-50);
       font-family: inherit; color: var(--ink); transition: border-color .15s, background .15s;
+      -moz-appearance: textfield; appearance: none;
+    }
+    textarea { height: auto; padding: 10px 12px; }
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    select {
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='%2378716c'><path d='M7 10l5 5 5-5z'/></svg>");
+      background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px;
     }
     input:focus, select:focus, textarea:focus {
       outline: none; border-color: var(--red); background: #fff; box-shadow: 0 0 0 4px rgba(255,45,32,0.10);
     }
-    .row { display: flex; gap: 16px; flex-wrap: wrap; }
+    .row { display: flex; gap: 14px; flex-wrap: wrap; }
     .row > div { flex: 1; min-width: 140px; }
     button, .btn {
-      display: inline-block; margin-top: 20px; padding: 11px 22px; font-size: 0.9rem; font-weight: 700;
+      display: inline-block; margin-top: 20px; height: 38px; padding: 0 20px; font-size: 0.85rem; font-weight: 700;
       border-radius: 999px; border: none; background: var(--red); color: #fff; cursor: pointer;
       text-decoration: none; box-shadow: 0 6px 16px rgba(255,45,32,0.25); transition: background .15s, transform .1s;
+      line-height: 38px;
     }
     button:hover, .btn:hover { background: var(--red-dark); }
     button:active, .btn:active { transform: scale(0.98); }
