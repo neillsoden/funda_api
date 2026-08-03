@@ -3,7 +3,7 @@
 {% block head %}
 <style>
   .wrap { max-width: 400px; }
-  h1 { font-size: 1.15rem; margin-bottom: 10px; }
+  h1 { display: none; }
   .tabs { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 10px; }
   .tabs button { margin: 0; height: 27px; padding: 0 11px; font-size: 0.68rem; font-weight: 700;
     border-radius: 999px; border: 1.5px solid var(--gray-200); background: #fff; color: var(--gray-600);
@@ -15,63 +15,63 @@
 
   .deck-container { display: none; }
   .deck-container.active { display: block; }
-  .deck { position: relative; height: 440px; }
-  .empty-state { text-align: center; color: var(--gray-500); padding: 40px 20px; font-size: 0.8rem; }
+  .deck { position: relative; height: 66vh; min-height: 420px; max-height: 560px; }
+  .empty-state { text-align: center; color: var(--gray-500); padding: 40px 20px; font-size: 0.8rem;
+    display: flex; align-items: center; justify-content: center; height: 100%; }
 
   .swipe-card {
-    position: absolute; inset: 0; background: #fff; border-radius: 14px; overflow: hidden;
-    box-shadow: 0 1px 3px rgba(23,22,26,0.10);
-    display: flex; flex-direction: column; touch-action: none; user-select: none;
-    border: 1.5px solid var(--gray-200);
+    position: absolute; inset: 0; border-radius: 18px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(23,22,26,0.14);
+    touch-action: none; user-select: none; background: var(--gray-100);
   }
-  .swipe-card.top { cursor: grab; }
-  .swipe-card .photo-wrap { position: relative; flex-shrink: 0; }
-  .swipe-card img.photo { width: 100%; height: 145px; object-fit: cover; display: block; background: var(--gray-100); }
-  .swipe-card .badge-new { position: absolute; top: 7px; left: 7px; background: #1967d2; color: #fff;
-    font-size: 9px; font-weight: 800; letter-spacing: 0.03em; padding: 3px 7px; border-radius: 5px; }
-  .swipe-card .badge-fav { position: absolute; top: 7px; right: 7px; background: #fbbc04; color: #202124;
-    font-size: 9px; font-weight: 800; padding: 3px 6px; border-radius: 5px; }
-  .swipe-card .stamp { position: absolute; top: 16px; font-size: 1rem; font-weight: 800; letter-spacing: 0.04em;
-    padding: 4px 10px; border-radius: 6px; border: 2.5px solid; opacity: 0; pointer-events: none; }
-  .swipe-card .stamp.like { left: 14px; color: #1e8e3e; border-color: #1e8e3e; transform: rotate(-18deg); }
-  .swipe-card .stamp.nope { right: 14px; color: #d93025; border-color: #d93025; transform: rotate(18deg); }
+  .swipe-card img.photo {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .swipe-card .scrim {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 62%;
+    background: linear-gradient(to top, rgba(0,0,0,0.86) 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0) 100%);
+  }
+  .swipe-card .badge-new { position: absolute; top: 12px; left: 12px; background: #1967d2; color: #fff;
+    font-size: 10px; font-weight: 800; letter-spacing: 0.03em; padding: 4px 9px; border-radius: 6px; }
+  .swipe-card .badge-fav { position: absolute; top: 12px; right: 12px; background: #fbbc04; color: #202124;
+    font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 6px; }
+  .swipe-card .stamp { position: absolute; top: 30px; font-size: 1.1rem; font-weight: 800; letter-spacing: 0.05em;
+    padding: 5px 12px; border-radius: 8px; border: 3px solid; opacity: 0; pointer-events: none; z-index: 2; }
+  .swipe-card .stamp.like { left: 16px; color: #34d17e; border-color: #34d17e; transform: rotate(-18deg); }
+  .swipe-card .stamp.nope { right: 16px; color: #ff5c4d; border-color: #ff5c4d; transform: rotate(18deg); }
 
-  .swipe-card .body { padding: 10px 12px 12px 12px; overflow-y: auto; flex: 1; }
-  .swipe-card .addr { color: var(--gray-500); font-size: 0.66rem; margin: 1px 0 6px 0; }
-  .swipe-card .title { font-weight: 700; font-size: 0.82rem; color: var(--ink); text-decoration: none; display: block; }
-  .swipe-card .price-row { display: flex; align-items: baseline; gap: 6px; margin: 6px 0 1px 0; }
-  .swipe-card .price { font-size: 1.05rem; font-weight: 800; }
-  .swipe-card .area { color: var(--gray-500); font-size: 0.64rem; }
-  .swipe-card .budget-text { font-size: 0.62rem; font-weight: 700; margin-bottom: 6px; }
+  .swipe-card .overlay { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 16px 16px 16px; color: #fff; }
+  .swipe-card .addr { font-size: 0.68rem; color: rgba(255,255,255,0.75); margin-bottom: 2px; }
+  .swipe-card .title-row { display: flex; align-items: baseline; gap: 8px; }
+  .swipe-card .title { font-weight: 800; font-size: 1rem; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+  .swipe-card .price-row { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 2px 0; }
+  .swipe-card .price { font-size: 1.3rem; font-weight: 800; }
+  .swipe-card .area { color: rgba(255,255,255,0.75); font-size: 0.68rem; }
+  .swipe-card .budget-text { font-size: 0.66rem; font-weight: 700; color: rgba(255,255,255,0.85); margin-bottom: 8px; }
 
-  .chip { display: inline-flex; align-items: center; gap: 3px; background: var(--gray-100); color: var(--gray-600);
-    font-size: 0.62rem; font-weight: 700; padding: 3px 7px; border-radius: 8px; margin: 0 4px 4px 0; text-decoration: none; }
-  .chip svg { width: 11px; height: 11px; flex-shrink: 0; }
-  .chip-group { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--gray-100); }
-  .price-drop { background: #fce8e6; color: #c5221f; font-size: 0.62rem; font-weight: 700; padding: 4px 8px;
-    border-radius: 6px; margin-bottom: 6px; }
-  .comp-row { font-size: 0.6rem; color: var(--gray-600); padding: 1px 0; }
-  .funda-link { display: block; text-align: center; margin-top: 8px; font-size: 0.66rem; font-weight: 700; }
-  .energy-dot { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
-    border-radius: 50%; font-size: 0.6rem; font-weight: 800; margin: 0 4px 4px 0; }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .pill { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.18);
+    backdrop-filter: blur(4px); color: #fff; font-size: 0.68rem; font-weight: 700; padding: 5px 9px; border-radius: 999px; }
+  .pill svg { width: 12px; height: 12px; flex-shrink: 0; }
+  .pill.ok { background: rgba(52,209,126,0.3); }
+  .pill.warn { background: rgba(255,92,77,0.3); }
+  .energy-dot { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+    border-radius: 50%; font-size: 0.62rem; font-weight: 800; box-shadow: 0 0 0 2px rgba(255,255,255,0.4); }
+  .funda-pill { margin-left: auto; text-decoration: none; }
 
-  .controls { display: flex; justify-content: center; gap: 18px; margin-top: 12px; }
-  .controls button { margin: 0; width: 44px; height: 44px; border-radius: 50%; padding: 0; font-size: 0; box-shadow: none; }
-  .controls .btn-nope { background: #fff; border: 2px solid #ffd4cf; }
+  .controls { display: flex; justify-content: center; gap: 20px; margin-top: 14px; }
+  .controls button { margin: 0; width: 48px; height: 48px; border-radius: 50%; padding: 0; font-size: 0; box-shadow: 0 2px 8px rgba(23,22,26,0.12); }
+  .controls .btn-nope { background: #fff; border: none; }
   .controls .btn-nope svg { fill: var(--red); }
-  .controls .btn-like { background: #fff; border: 2px solid #bfe8cb; }
+  .controls .btn-like { background: #fff; border: none; }
   .controls .btn-like svg { fill: #1e8e3e; }
   .controls button svg { pointer-events: none; width: 20px; height: 20px; }
   @media (max-width: 480px) {
     .wrap { padding-top: 12px; padding-bottom: 10px; }
-    h1 { display: none; }
     .refresh-row { margin-bottom: 6px; }
     .tabs { margin-bottom: 6px; }
-    .deck { height: calc(100dvh - 200px); min-height: 300px; max-height: 480px; }
-    .swipe-card img.photo { height: 120px; }
-    .controls { margin-top: 8px; gap: 14px; }
-    .controls button { width: 40px; height: 40px; }
-    .controls button svg { width: 18px; height: 18px; }
+    .deck { height: calc(100dvh - 190px); min-height: 320px; max-height: 520px; }
+    .controls { margin-top: 10px; }
   }
 </style>
 {% if running %}<meta http-equiv="refresh" content="6">{% endif %}
@@ -80,12 +80,8 @@
   {% macro icon(path, size=11) %}<svg viewBox="0 0 24 24" width="{{ size }}" height="{{ size }}" fill="currentColor"><path d="{{ path }}"/></svg>{% endmacro %}
   {% set ICON_BED = "M7 13c1.66 0 3-1.34 3-3S8.66 7 7 7s-3 1.34-3 3 1.34 3 3 3zm12-6h-8v7H3V5H1v15h2v-3h18v3h2v-9c0-2.21-1.79-4-4-4z" %}
   {% set ICON_BIKE = "M15.5 5.5c1.11 0 2-.89 2-2s-.89-2-2-2-2 .89-2 2 .89 2 2 2zM5 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.93 0-3.5-1.57-3.5-3.5S3.07 13.5 5 13.5s3.5 1.57 3.5 3.5S6.93 20.5 5 20.5zm5.8-10l2.4-2.4.8.8c1.3 1.3 3 2.1 5.1 2.1V9c-1.5 0-2.7-.6-3.6-1.5l-1.9-1.9c-.5-.4-1-.6-1.6-.6s-1.1.2-1.4.6L7.8 8.4c-.4.4-.6.9-.6 1.4 0 .6.2 1.1.6 1.4L11 14v5h2v-6.2l-2.2-2.3zM19 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z" %}
-  {% set ICON_PLACE = "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" %}
-  {% set ICON_SCHEDULE = "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" %}
-  {% set ICON_SELL = "M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41c0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z" %}
-  {% set ICON_INSIGHTS = "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" %}
+  {% set ICON_OPEN = "M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zm-9 2c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-7h-2v7H5V7h7V5H5z" %}
 
-  <h1>Houses</h1>
   <div class="refresh-row">
     <span class="status">
       {% if running %}Building the deck…{% elif updated_at %}Updated {{ updated_at.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}Not built yet{% endif %}
@@ -111,60 +107,29 @@
         <div class="deck" id="deck-{{ loop.index0 }}">
           <div class="empty-state" style="display:none;">No more houses in {{ city }}.</div>
           {% for c in items %}
-            <div class="swipe-card" data-id="{{ c.id }}" style="z-index:{{ items|length - loop.index0 }};{% if c.accent_color %}border-left:4px solid {{ c.accent_color }};{% endif %}">
-              <div class="photo-wrap">
-                <img class="photo" src="{{ c.photo }}" draggable="false">
-                {% if c.is_new %}<div class="badge-new">NEW</div>{% endif %}
-                {% if c.favorited_by %}<div class="badge-fav">&#9733; {{ c.favorited_by|join(', ') }}</div>{% endif %}
-                <div class="stamp like">LIKE</div>
-                <div class="stamp nope">NOPE</div>
-              </div>
-              <div class="body">
-                {% if c.price_drop_from %}
-                  <div class="price-drop">{{ icon(ICON_SELL, 10) }} €{{ '{:,}'.format(c.price_drop_from) }} &rarr; {{ c.price }}</div>
-                {% endif %}
-                <a class="title" href="{{ c.url }}" target="_blank" rel="noopener">{{ c.title }}</a>
+            <div class="swipe-card" data-id="{{ c.id }}" style="z-index:{{ items|length - loop.index0 }};{% if c.accent_color %}box-shadow:0 0 0 3px {{ c.accent_color }};{% endif %}">
+              <img class="photo" src="{{ c.photo }}" draggable="false">
+              <div class="scrim"></div>
+              {% if c.is_new %}<div class="badge-new">NEW</div>{% endif %}
+              {% if c.favorited_by %}<div class="badge-fav">&#9733; {{ c.favorited_by|join(', ') }}</div>{% endif %}
+              <div class="stamp like">LIKE</div>
+              <div class="stamp nope">NOPE</div>
+              <div class="overlay">
                 <div class="addr">{{ c.neighbourhood + ', ' if c.neighbourhood }}{{ c.city }}</div>
+                <div class="title-row"><span class="title">{{ c.title }}</span></div>
                 <div class="price-row">
                   <span class="price" style="color:{{ c.price_color }};">{{ c.price }}</span>
                   {% if c.area_text %}<span class="area">{{ c.area_text }}</span>{% endif %}
                 </div>
-                {% if c.budget_total_text %}<div class="budget-text" style="color:{{ c.price_color }};">of {{ c.budget_total_text }} budget</div>{% endif %}
-
-                <div>
-                  <span class="chip" title="{{ c.bedrooms }} bedrooms">{{ icon(ICON_BED) }}{{ c.bedrooms }}</span>
+                {% if c.budget_total_text %}<div class="budget-text">of {{ c.budget_total_text }} budget</div>{% endif %}
+                <div class="pill-row">
+                  <span class="pill" title="{{ c.bedrooms }} bedrooms">{{ icon(ICON_BED) }}{{ c.bedrooms }}</span>
                   {% if c.school %}
-                    <a class="chip" style="background:{{ '#e6f4ea' if c.school.ok else '#fce8e6' }};color:{{ '#146c2e' if c.school.ok else '#c5221f' }};" href="{{ c.school.href }}" target="_blank" rel="noopener" title="{{ c.school.title }}">{{ icon(ICON_BIKE) }}{{ c.school.km_text }}</a>
+                    <span class="pill {{ 'ok' if c.school.ok else 'warn' }}" title="{{ c.school.title }}">{{ icon(ICON_BIKE) }}{{ c.school.km_text }}</span>
                   {% endif %}
                   <span class="energy-dot" style="background:{{ c.energy_bg }};color:{{ c.energy_text }};" title="Energy label {{ c.energy_label }}">{{ c.energy_label }}</span>
+                  <a class="pill funda-pill" href="{{ c.url }}" target="_blank" rel="noopener">{{ icon(ICON_OPEN) }} Funda</a>
                 </div>
-
-                {% if c.distance_chips %}
-                  <div class="chip-group">
-                    {% for d in c.distance_chips %}
-                      {% if d.href %}<a class="chip" style="background:#e8f0fe;color:#1967d2;" href="{{ d.href }}" target="_blank" rel="noopener" title="{{ d.title }}">{{ icon(ICON_PLACE) }}{{ d.km_text }} {{ d.name }}</a>
-                      {% else %}<span class="chip" style="background:#e8f0fe;color:#1967d2;" title="{{ d.title }}">{{ icon(ICON_PLACE) }}{{ d.km_text }} {{ d.name }}</span>{% endif %}
-                    {% endfor %}
-                  </div>
-                {% endif %}
-
-                <div class="chip-group">
-                  {% if c.listed_short %}<span class="chip" title="{{ c.listed_title }}">{{ icon(ICON_SCHEDULE) }}{{ c.listed_short }}</span>{% endif %}
-                  {% if c.sold_short %}<span class="chip" title="{{ c.sold_title }}">{{ icon(ICON_SELL) }}{{ c.sold_short }}</span>{% endif %}
-                  {% if c.market %}
-                    <span class="chip" style="background:{{ '#e6f4ea' if c.market.ok else '#fce8e6' }};color:{{ '#146c2e' if c.market.ok else '#c5221f' }};" title="{{ c.market.title }}">{{ icon(ICON_INSIGHTS) }}{{ c.market.short_text }}</span>
-                  {% endif %}
-                </div>
-
-                {% if c.comparables %}
-                  <div class="chip-group">
-                    {% for comp in c.comparables %}
-                      <div class="comp-row">{{ comp.title }} — €{{ '{:,}'.format(comp.price) }}{% if comp.price_per_m2 %} · €{{ '{:,}'.format(comp.price_per_m2) }}/m²{% endif %}</div>
-                    {% endfor %}
-                  </div>
-                {% endif %}
-
-                <a class="funda-link" href="{{ c.url }}" target="_blank" rel="noopener">View on Funda &#8599;</a>
               </div>
             </div>
           {% endfor %}

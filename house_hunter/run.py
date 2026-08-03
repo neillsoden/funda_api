@@ -151,6 +151,7 @@ def browse_listings(config: dict | None = None) -> list[EnrichedListing]:
                     already_viewed=listing.id in viewed_ids,
                     is_new=events.get(listing.id) == "new",
                     favorited_by_people=favorites_by_listing.get(listing.id, set()),
+                    include_extras=False,
                 )
             )
 

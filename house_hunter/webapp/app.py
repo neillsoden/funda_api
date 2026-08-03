@@ -25,7 +25,6 @@ from funda import Funda, FundaError  # noqa: E402
 from house_hunter.config import load_config, save_config  # noqa: E402
 from house_hunter.email_report import (  # noqa: E402
     _contrast_text_color,
-    _days_listed,
     _energy_color,
     _maps_directions_url,
     _price_budget_color,
@@ -136,17 +135,17 @@ def _refresh_browse_cache() -> None:
 
 
 def _card_view(item) -> dict:
-    """Flatten an EnrichedListing into plain display fields the houses.html
-    template can render without needing Python helpers - short, icon-led
-    versions of the same information the email cards show (the swipe deck
-    has much less room per card than an email)."""
+    """Flatten an EnrichedListing into the handful of fields the swipe-deck
+    card actually shows. Deliberately not a copy of the email card - this is
+    a fast yes/no glance, not a full listing report, so it only keeps what's
+    needed to decide: price vs. budget, bedrooms, school distance, energy
+    label. Everything else is one tap away on Funda."""
     listing = item.listing
     price_color = _price_budget_color(listing.price.amount, item.mortgage_budget)
     energy_bg = _energy_color(listing.energy_label)
     accent_color = _school_proximity_color(item.school_distance_km, item.max_school_distance_km)
 
-    other_distances, school_entry = _split_school_distance(item.distances)
-
+    _, school_entry = _split_school_distance(item.distances)
     school = None
     if school_entry:
         _, school_dist = school_entry
@@ -165,64 +164,13 @@ def _card_view(item) -> dict:
             "ok": within_range,
         }
 
-    distance_chips = []
-    for name, dist in other_distances.items():
-        # "Nearest train station (Arnhem Velperpoort)" -> just the place name
-        short_name = name.split("(", 1)[1].rstrip(")") if "(" in name else name
-        full_text = f"{dist.km:.1f} km ({dist.duration_text}) to {name}" if dist.duration_text else f"{dist.km:.1f} km to {name}"
-        distance_chips.append(
-            {
-                "km_text": f"{dist.km:.1f} km",
-                "name": short_name,
-                "href": _maps_directions_url(listing.location.coordinates, dist),
-                "title": full_text,
-            }
-        )
-
-    listed_date, days_listed = _days_listed(listing)
-    listed_short = f"{days_listed}d ago" if days_listed is not None else None
-    listed_title = f"Listed {listed_date}" if listed_date else "Listed date unknown"
-
-    sold_short = None
-    sold_title = None
-    if item.previous_sale:
-        sold_short = f"€{round(item.previous_sale.price / 1000)}k ({item.previous_sale.date[:4]})"
-        sold_title = f"Last sold €{item.previous_sale.price:,} ({item.previous_sale.date})"
-
     budget_total_text = None
     if item.mortgage_budget is not None and listing.price.amount is not None:
         budget_total_text = f"€{item.mortgage_budget:,}"
 
-    market = None
-    if item.market and item.market.get("avg_asking_price_per_m2") and listing.living_area:
-        avg_per_m2 = item.market["avg_asking_price_per_m2"]
-        listing_per_m2 = round(listing.price.amount / listing.living_area) if listing.price.amount else None
-        if listing_per_m2 is not None:
-            diff_pct = round((listing_per_m2 - avg_per_m2) / avg_per_m2 * 100)
-            neighbourhood = item.market.get("neighbourhood", "area")
-            below = diff_pct <= 0
-            market = {
-                "ok": below,
-                "short_text": f"{abs(diff_pct)}% {'below' if below else 'above'} avg",
-                "title": (
-                    f"€{listing_per_m2:,}/m² · {abs(diff_pct)}% "
-                    f"{'below' if below else 'above'} {neighbourhood} avg (€{avg_per_m2:,}/m²)"
-                ),
-            }
-
-    comparables = [
-        {
-            "title": comp.title,
-            "url": comp.url,
-            "price": comp.price,
-            "price_per_m2": comp.price_per_m2,
-        }
-        for comp in item.comparables[:2]
-    ]
-
     area_parts = []
     if listing.living_area:
-        area_parts.append(f"{listing.living_area} m² living")
+        area_parts.append(f"{listing.living_area} m²")
     if listing.plot_area:
         area_parts.append(f"{listing.plot_area} m² plot")
 
@@ -242,17 +190,9 @@ def _card_view(item) -> dict:
         "energy_bg": energy_bg,
         "energy_text": _contrast_text_color(energy_bg),
         "school": school,
-        "distance_chips": distance_chips,
-        "listed_short": listed_short,
-        "listed_title": listed_title,
-        "sold_short": sold_short,
-        "sold_title": sold_title,
-        "market": market,
-        "comparables": comparables,
         "accent_color": accent_color,
         "is_new": item.is_new,
         "price_drop_from": item.price_drop_from,
-        "already_viewed": item.already_viewed,
         "favorited_by": sorted(item.favorited_by),
     }
 

@@ -22,14 +22,19 @@ def enrich_listing(
     already_viewed: bool = False,
     is_new: bool = True,
     favorited_by_people: set[str] | None = None,
+    include_extras: bool = True,
 ) -> EnrichedListing:
+    """include_extras=False skips the fixed-place/nearest-type distances and
+    the previous-sale/market/comparables Funda lookups - used by the houses
+    swipe deck, which only shows school distance + budget, to keep building
+    it (up to ~40 listings) fast."""
     places = config["poi"]["places"]
     nearest_types = config["poi"].get("nearest_types", [])
     mortgage_budget = config["search"].get("mortgage_budget") or {}
 
     coords = listing.location.coordinates
     distances = {}
-    if coords:
+    if coords and include_extras:
         for place in places:
             place_city = place.get("city")
             if place_city and listing.city and place_city.lower() != listing.city.lower():
@@ -55,10 +60,10 @@ def enrich_listing(
     return EnrichedListing(
         listing=listing,
         distances=distances,
-        previous_sale=previous_sale(client, listing),
+        previous_sale=previous_sale(client, listing) if include_extras else None,
         mortgage_budget=budget_for_label(mortgage_budget, listing.energy_label),
-        market=get_market_insights(client, listing.city, listing.address.neighbourhood),
-        comparables=recently_sold_comparables(client, listing),
+        market=get_market_insights(client, listing.city, listing.address.neighbourhood) if include_extras else None,
+        comparables=recently_sold_comparables(client, listing) if include_extras else [],
         price_drop_from=price_drop_from,
         school_distance_km=school_distance_km,
         max_school_distance_km=config["search"].get("max_school_distance_km"),
