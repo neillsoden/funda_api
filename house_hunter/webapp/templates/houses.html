@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% block title %}Houses — House Hunter{% endblock %}
+{% block head %}
+<style>
+  .wrap { max-width: 460px; }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 16px; }
+  .tabs button { margin: 0; height: 32px; padding: 0 14px; font-size: 0.78rem; font-weight: 700;
+    border-radius: 999px; border: 1.5px solid var(--gray-200); background: #fff; color: var(--gray-600);
+    cursor: pointer; white-space: nowrap; }
+  .tabs button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .refresh-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .refresh-row .status { font-size: 0.78rem; color: var(--gray-500); }
+  .refresh-row button { margin: 0; height: 30px; padding: 0 12px; font-size: 0.76rem; }
+
+  .deck-container { display: none; }
+  .deck-container.active { display: block; }
+  .deck { position: relative; height: 560px; }
+  .empty-state { text-align: center; color: var(--gray-500); padding: 60px 20px; }
+
+  .swipe-card {
+    position: absolute; inset: 0; background: #fff; border-radius: 18px; overflow: hidden;
+    box-shadow: 0 4px 14px rgba(23,22,26,0.10), 0 1px 3px rgba(23,22,26,0.08);
+    display: flex; flex-direction: column; touch-action: none; user-select: none;
+    border: 1.5px solid var(--gray-200);
+  }
+  .swipe-card.top { cursor: grab; }
+  .swipe-card .photo-wrap { position: relative; flex-shrink: 0; }
+  .swipe-card img.photo { width: 100%; height: 220px; object-fit: cover; display: block; background: var(--gray-100); }
+  .swipe-card .badge-new { position: absolute; top: 10px; left: 10px; background: #1967d2; color: #fff;
+    font-size: 10px; font-weight: 800; letter-spacing: 0.04em; padding: 4px 9px; border-radius: 6px; }
+  .swipe-card .badge-fav { position: absolute; top: 10px; right: 10px; background: #fbbc04; color: #202124;
+    font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 6px; }
+  .swipe-card .stamp { position: absolute; top: 24px; font-size: 1.3rem; font-weight: 800; letter-spacing: 0.05em;
+    padding: 6px 14px; border-radius: 8px; border: 3px solid; transform: rotate(-18deg); opacity: 0; pointer-events: none; }
+  .swipe-card .stamp.like { left: 20px; color: #1e8e3e; border-color: #1e8e3e; transform: rotate(-18deg); }
+  .swipe-card .stamp.nope { right: 20px; color: #d93025; border-color: #d93025; transform: rotate(18deg); }
+
+  .swipe-card .body { padding: 14px 16px 16px 16px; overflow-y: auto; flex: 1; }
+  .swipe-card .addr { color: var(--gray-500); font-size: 0.76rem; margin: 2px 0 8px 0; }
+  .swipe-card .title { font-weight: 700; font-size: 0.95rem; color: var(--ink); text-decoration: none; display: block; }
+  .swipe-card .price-row { display: flex; align-items: baseline; gap: 8px; margin: 8px 0 2px 0; }
+  .swipe-card .price { font-size: 1.25rem; font-weight: 800; }
+  .swipe-card .area { color: var(--gray-500); font-size: 0.76rem; }
+  .swipe-card .budget-text { font-size: 0.72rem; font-weight: 700; margin-bottom: 8px; }
+  .chip { display: inline-block; background: var(--gray-100); color: var(--gray-600); font-size: 0.7rem;
+    font-weight: 700; padding: 4px 9px; border-radius: 10px; margin: 0 5px 5px 0; text-decoration: none; }
+  .chip-group { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--gray-100); }
+  .price-drop { background: #fce8e6; color: #c5221f; font-size: 0.72rem; font-weight: 700; padding: 6px 10px;
+    border-radius: 8px; margin-bottom: 8px; }
+  .comp-row { font-size: 0.7rem; color: var(--gray-600); padding: 2px 0; }
+  .funda-link { display: block; text-align: center; margin-top: 10px; font-size: 0.74rem; font-weight: 700; }
+
+  .controls { display: flex; justify-content: center; gap: 24px; margin-top: 18px; }
+  .controls button { margin: 0; width: 56px; height: 56px; border-radius: 50%; padding: 0; font-size: 0; }
+  .controls .btn-nope { background: #fff; border: 2px solid #ffd4cf; }
+  .controls .btn-nope svg { fill: var(--red); }
+  .controls .btn-like { background: #fff; border: 2px solid #bfe8cb; }
+  .controls .btn-like svg { fill: #1e8e3e; }
+  .controls button svg { pointer-events: none; }
+  @media (max-width: 480px) {
+    .deck { height: 66vh; min-height: 420px; }
+  }
+</style>
+{% if running %}<meta http-equiv="refresh" content="6">{% endif %}
+{% endblock %}
+{% block content %}
+  <h1>Houses</h1>
+  <div class="refresh-row">
+    <span class="status">
+      {% if running %}Building the deck…{% elif updated_at %}Updated {{ updated_at.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}Not built yet{% endif %}
+    </span>
+    <form method="post" action="{{ url_for('houses_refresh') }}">
+      <button type="submit" class="btn-secondary" {% if running %}disabled{% endif %}>Refresh</button>
+    </form>
+  </div>
+
+  {% if error %}<div class="errors">{{ error }}</div>{% endif %}
+
+  {% if not cards %}
+    <div class="card"><p class="hint" style="margin:0;">{% if running %}Building your deck for the first time — this can take a minute.{% else %}No listings to show yet.{% endif %}</p></div>
+  {% else %}
+    <div class="tabs">
+      {% for city in cards.keys() %}
+        <button type="button" data-tab="{{ loop.index0 }}" class="{{ 'active' if loop.first }}" onclick="showTab({{ loop.index0 }})">{{ city }} ({{ cards[city]|length }})</button>
+      {% endfor %}
+    </div>
+
+    {% for city, items in cards.items() %}
+      <div class="deck-container {{ 'active' if loop.first }}" data-deck-index="{{ loop.index0 }}">
+        <div class="deck" id="deck-{{ loop.index0 }}">
+          <div class="empty-state" style="display:none;">No more houses in {{ city }}.</div>
+          {% for c in items %}
+            <div class="swipe-card" data-id="{{ c.id }}" style="z-index:{{ items|length - loop.index0 }};">
+              <div class="photo-wrap">
+                <img class="photo" src="{{ c.photo }}" draggable="false">
+                {% if c.is_new %}<div class="badge-new">NEW</div>{% endif %}
+                {% if c.favorited_by %}<div class="badge-fav">&#9733; {{ c.favorited_by|join(', ') }}</div>{% endif %}
+                <div class="stamp like">LIKE</div>
+                <div class="stamp nope">NOPE</div>
+              </div>
+              <div class="body">
+                {% if c.price_drop_from %}
+                  <div class="price-drop">Price dropped: €{{ '{:,}'.format(c.price_drop_from) }} &rarr; {{ c.price }}</div>
+                {% endif %}
+                <a class="title" href="{{ c.url }}" target="_blank" rel="noopener">{{ c.title }}</a>
+                <div class="addr">{{ c.neighbourhood + ', ' if c.neighbourhood }}{{ c.city }}</div>
+                <div class="price-row">
+                  <span class="price" style="color:{{ c.price_color }};">{{ c.price }}</span>
+                  {% if c.area_text %}<span class="area">{{ c.area_text }}</span>{% endif %}
+                </div>
+                {% if c.budget_total_text %}<div class="budget-text" style="color:{{ c.price_color }};">of {{ c.budget_total_text }} budget</div>{% endif %}
+
+                <div>
+                  <span class="chip">{{ c.bedrooms }} bedrooms</span>
+                  {% if c.school %}
+                    <a class="chip" style="background:#e6f4ea;color:#146c2e;" href="{{ c.school.href }}" target="_blank" rel="noopener">{{ c.school.text }}</a>
+                  {% endif %}
+                  <span class="chip" style="background:{{ c.energy_bg }};color:{{ c.energy_text }};">{{ c.energy_label }}</span>
+                </div>
+                {% if c.within_range %}
+                  <div><span class="chip" style="background:{{ '#e6f4ea' if c.within_range.ok else '#fce8e6' }};color:{{ '#146c2e' if c.within_range.ok else '#c5221f' }};">{{ c.within_range.text }}</span></div>
+                {% endif %}
+
+                {% if c.distance_chips %}
+                  <div class="chip-group">
+                    {% for d in c.distance_chips %}
+                      {% if d.href %}<a class="chip" style="background:#e8f0fe;color:#1967d2;" href="{{ d.href }}" target="_blank" rel="noopener">{{ d.text }}</a>
+                      {% else %}<span class="chip" style="background:#e8f0fe;color:#1967d2;">{{ d.text }}</span>{% endif %}
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <div class="chip-group">
+                  <span class="chip">{{ c.listed_text }}</span>
+                  <span class="chip">{{ c.sold_text }}</span>
+                </div>
+
+                {% if c.budget_text %}
+                  <div class="chip-group"><span class="chip" style="background:#e6f4ea;color:#146c2e;">{{ c.budget_text }}</span></div>
+                {% endif %}
+
+                {% if c.market %}
+                  <div class="chip-group">
+                    <span class="chip" style="background:{{ '#e6f4ea' if c.market.ok else '#fce8e6' }};color:{{ '#146c2e' if c.market.ok else '#c5221f' }};">{{ c.market.text }}</span>
+                  </div>
+                {% endif %}
+
+                {% if c.comparables %}
+                  <div class="chip-group">
+                    {% for comp in c.comparables %}
+                      <div class="comp-row">{{ comp.title }} — €{{ '{:,}'.format(comp.price) }}{% if comp.price_per_m2 %} · €{{ '{:,}'.format(comp.price_per_m2) }}/m²{% endif %}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <a class="funda-link" href="{{ c.url }}" target="_blank" rel="noopener">View on Funda &#8599;</a>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="controls">
+          <button type="button" class="btn-nope" onclick="programmaticSwipe({{ loop.index0 }}, 'left')" aria-label="Not interested">
+            <svg width="24" height="24" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+          <button type="button" class="btn-like" onclick="programmaticSwipe({{ loop.index0 }}, 'right')" aria-label="Favorite">
+            <svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+          </button>
+        </div>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <script>
+    function showTab(index) {
+      document.querySelectorAll('.tabs button').forEach((btn, i) => btn.classList.toggle('active', i === index));
+      document.querySelectorAll('.deck-container').forEach((el) => {
+        el.classList.toggle('active', el.dataset.deckIndex == index);
+      });
+    }
+
+    function csrfSafeAction(listingId, direction) {
+      return fetch(`/houses/action/${listingId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction }),
+      });
+    }
+
+    function topCard(deckIndex) {
+      const deck = document.getElementById(`deck-${deckIndex}`);
+      const cards = deck.querySelectorAll('.swipe-card');
+      return cards.length ? cards[cards.length - 1] : null;
+    }
+
+    function afterCardRemoved(deckIndex) {
+      const deck = document.getElementById(`deck-${deckIndex}`);
+      const emptyState = deck.querySelector('.empty-state');
+      const remaining = deck.querySelectorAll('.swipe-card');
+      if (!remaining.length) emptyState.style.display = 'flex';
+    }
+
+    function flingCard(card, deckIndex, direction) {
+      const dx = direction === 'right' ? 600 : -600;
+      card.style.transition = 'transform .35s ease, opacity .35s ease';
+      card.style.transform = `translate(${dx}px, -40px) rotate(${direction === 'right' ? 30 : -30}deg)`;
+      card.style.opacity = '0';
+      const listingId = card.dataset.id;
+      csrfSafeAction(listingId, direction);
+      setTimeout(() => {
+        card.remove();
+        afterCardRemoved(deckIndex);
+      }, 350);
+    }
+
+    function programmaticSwipe(deckIndex, direction) {
+      const card = topCard(deckIndex);
+      if (!card) return;
+      flingCard(card, deckIndex, direction);
+    }
+
+    function initDrag(card, deckIndex) {
+      let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false;
+      const likeStamp = card.querySelector('.stamp.like');
+      const nopeStamp = card.querySelector('.stamp.nope');
+
+      function onDown(e) {
+        if (card.parentElement.querySelectorAll('.swipe-card')[card.parentElement.querySelectorAll('.swipe-card').length - 1] !== card) return;
+        dragging = true;
+        startX = e.clientX; startY = e.clientY;
+        card.style.transition = 'none';
+        card.setPointerCapture(e.pointerId);
+      }
+      function onMove(e) {
+        if (!dragging) return;
+        dx = e.clientX - startX; dy = e.clientY - startY;
+        card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 16}deg)`;
+        likeStamp.style.opacity = Math.min(Math.max(dx / 100, 0), 1);
+        nopeStamp.style.opacity = Math.min(Math.max(-dx / 100, 0), 1);
+      }
+      function onUp() {
+        if (!dragging) return;
+        dragging = false;
+        const threshold = 110;
+        if (dx > threshold) {
+          flingCard(card, deckIndex, 'right');
+        } else if (dx < -threshold) {
+          flingCard(card, deckIndex, 'left');
+        } else {
+          card.style.transition = 'transform .25s ease';
+          card.style.transform = 'translate(0,0) rotate(0)';
+          likeStamp.style.opacity = 0;
+          nopeStamp.style.opacity = 0;
+        }
+        dx = 0; dy = 0;
+      }
+
+      card.addEventListener('pointerdown', onDown);
+      card.addEventListener('pointermove', onMove);
+      card.addEventListener('pointerup', onUp);
+      card.addEventListener('pointercancel', onUp);
+    }
+
+    document.querySelectorAll('.swipe-card').forEach((card) => {
+      const deckIndex = card.closest('.deck-container').dataset.deckIndex;
+      initDrag(card, deckIndex);
+    });
+  </script>
+{% endblock %}

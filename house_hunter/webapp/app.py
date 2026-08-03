@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
-from flask import Flask, abort, redirect, render_template, request, session, url_for
+from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
@@ -23,7 +23,17 @@ load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 from funda import Funda, FundaError  # noqa: E402
 
 from house_hunter.config import load_config, save_config  # noqa: E402
+from house_hunter.email_report import (  # noqa: E402
+    _contrast_text_color,
+    _days_listed,
+    _energy_color,
+    _maps_directions_url,
+    _price_budget_color,
+    _school_proximity_color,
+    _split_school_distance,
+)
 from house_hunter.poi import geocode_address  # noqa: E402
+from house_hunter.run import browse_listings  # noqa: E402
 from house_hunter.run import run as run_pipeline  # noqa: E402
 from house_hunter.state import (  # noqa: E402
     add_favorite,
@@ -97,6 +107,152 @@ def _split_list(raw: str) -> list[str]:
     """Accepts comma-separated (preferred, compact) or newline-separated input."""
     parts = raw.replace("\n", ",").split(",")
     return [part.strip() for part in parts if part.strip()]
+
+
+# --- /houses swipe deck: in-memory cache of the last full enrichment pass,
+# since building it (Funda search + Google distance calls per listing) is
+# too slow to redo on every page load. Refreshed in the background when
+# stale, or on demand via the Refresh button.
+_BROWSE_STALE_SECONDS = 20 * 60
+_browse_lock = threading.Lock()
+_browse_cache: dict = {"items": [], "updated_at": None, "error": None}
+_browse_status: dict = {"running": False}
+
+
+def _refresh_browse_cache() -> None:
+    if not _browse_lock.acquire(blocking=False):
+        return
+    _browse_status["running"] = True
+    try:
+        items = browse_listings()
+        _browse_cache["items"] = items
+        _browse_cache["updated_at"] = datetime.now(timezone.utc)
+        _browse_cache["error"] = None
+    except Exception as exc:  # noqa: BLE001 - keep the old cache, surface the error instead
+        _browse_cache["error"] = str(exc)
+    finally:
+        _browse_status["running"] = False
+        _browse_lock.release()
+
+
+def _card_view(item) -> dict:
+    """Flatten an EnrichedListing into plain display fields the houses.html
+    template can render without needing Python helpers - same information
+    the email cards show."""
+    listing = item.listing
+    price_color = _price_budget_color(listing.price.amount, item.mortgage_budget)
+    energy_bg = _energy_color(listing.energy_label)
+
+    other_distances, school_entry = _split_school_distance(item.distances)
+
+    school = None
+    if school_entry:
+        _, school_dist = school_entry
+        school = {
+            "text": (
+                f"{school_dist.km:.1f} km ({school_dist.duration_text}) to school"
+                if school_dist.duration_text
+                else f"{school_dist.km:.1f} km to school"
+            ),
+            "href": _maps_directions_url(listing.location.coordinates, school_dist),
+        }
+
+    within_range = None
+    if item.school_distance_km is not None and item.max_school_distance_km is not None:
+        ok = item.school_distance_km <= item.max_school_distance_km
+        within_range = {
+            "ok": ok,
+            "text": f"{'Within' if ok else 'Outside'} {item.max_school_distance_km:g}km biking distance",
+        }
+
+    distance_chips = [
+        {
+            "text": (
+                f"{dist.km:.1f} km ({dist.duration_text}) · {name}"
+                if dist.duration_text
+                else f"{dist.km:.1f} km · {name}"
+            ),
+            "href": _maps_directions_url(listing.location.coordinates, dist),
+        }
+        for name, dist in other_distances.items()
+    ]
+
+    listed_date, days_listed = _days_listed(listing)
+    listed_text = f"Listed {listed_date} ({days_listed}d ago)" if listed_date else "Listed date unknown"
+    sold_text = (
+        f"Last sold €{item.previous_sale.price:,} ({item.previous_sale.date})"
+        if item.previous_sale
+        else "No previous sale on record"
+    )
+
+    budget_text = None
+    budget_total_text = None
+    if item.mortgage_budget is not None and listing.price.amount is not None:
+        margin = item.mortgage_budget - listing.price.amount
+        budget_text = f"€{margin:,} under budget (max €{item.mortgage_budget:,})"
+        budget_total_text = f"€{item.mortgage_budget:,}"
+
+    market_text = None
+    if item.market and item.market.get("avg_asking_price_per_m2") and listing.living_area:
+        avg_per_m2 = item.market["avg_asking_price_per_m2"]
+        listing_per_m2 = round(listing.price.amount / listing.living_area) if listing.price.amount else None
+        if listing_per_m2 is not None:
+            diff_pct = round((listing_per_m2 - avg_per_m2) / avg_per_m2 * 100)
+            neighbourhood = item.market.get("neighbourhood", "area")
+            below = diff_pct <= 0
+            market_text = {
+                "ok": below,
+                "text": (
+                    f"€{listing_per_m2:,}/m² · {abs(diff_pct)}% "
+                    f"{'below' if below else 'above'} {neighbourhood} avg (€{avg_per_m2:,}/m²)"
+                ),
+            }
+
+    comparables = [
+        {
+            "title": comp.title,
+            "url": comp.url,
+            "price": comp.price,
+            "price_per_m2": comp.price_per_m2,
+        }
+        for comp in item.comparables
+    ]
+
+    area_parts = []
+    if listing.living_area:
+        area_parts.append(f"{listing.living_area} m² living")
+    if listing.plot_area:
+        area_parts.append(f"{listing.plot_area} m² plot")
+
+    return {
+        "id": listing.id,
+        "url": listing.url,
+        "photo": listing.media.photo_urls[0] if listing.media.photo_urls else "",
+        "title": listing.title,
+        "city": listing.city,
+        "neighbourhood": listing.address.neighbourhood,
+        "price": f"€{listing.price.amount:,}" if listing.price.amount else "price unknown",
+        "price_color": price_color,
+        "budget_text": budget_text,
+        "budget_total_text": budget_total_text,
+        "area_text": " · ".join(area_parts),
+        "bedrooms": listing.bedrooms,
+        "energy_label": listing.energy_label or "?",
+        "energy_bg": energy_bg,
+        "energy_text": _contrast_text_color(energy_bg),
+        "school": school,
+        "within_range": within_range,
+        "distance_chips": distance_chips,
+        "listed_text": listed_text,
+        "sold_text": sold_text,
+        "market": market_text,
+        "comparables": comparables,
+        "accent_color": _school_proximity_color(item.school_distance_km, item.max_school_distance_km),
+        "is_new": item.is_new,
+        "price_drop_from": item.price_drop_from,
+        "already_viewed": item.already_viewed,
+        "favorited_by": sorted(item.favorited_by),
+    }
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -427,6 +583,57 @@ def logs():
     """Run history for the last 7 days - when the pipeline fired, why
     (startup/scheduled/manual/force), and what happened."""
     return render_template("logs.html", logs=recent_run_logs())
+
+
+@app.route("/houses", methods=["GET"])
+@login_required
+def houses():
+    """Tinder-style swipe deck of every currently matching listing, tabbed
+    by city. Swipe right favorites (as the logged-in person), left marks
+    "not interested" - same actions as the email buttons, just faster."""
+    stale = (
+        _browse_cache["updated_at"] is None
+        or (datetime.now(timezone.utc) - _browse_cache["updated_at"]).total_seconds() > _BROWSE_STALE_SECONDS
+    )
+    if stale and not _browse_status["running"]:
+        threading.Thread(target=_refresh_browse_cache, daemon=True).start()
+
+    grouped: dict[str, list[dict]] = {}
+    for item in _browse_cache["items"]:
+        city = item.listing.city or "Unknown"
+        grouped.setdefault(city, []).append(_card_view(item))
+
+    return render_template(
+        "houses.html",
+        cards=dict(sorted(grouped.items())),
+        running=_browse_status["running"] or _browse_cache["updated_at"] is None,
+        updated_at=_browse_cache["updated_at"],
+        error=_browse_cache["error"],
+    )
+
+
+@app.route("/houses/refresh", methods=["POST"])
+@login_required
+def houses_refresh():
+    if not _browse_status["running"]:
+        threading.Thread(target=_refresh_browse_cache, daemon=True).start()
+    return redirect(url_for("houses"))
+
+
+@app.route("/houses/action/<listing_id>", methods=["POST"])
+@login_required
+def houses_action(listing_id: str):
+    direction = (request.get_json(silent=True) or {}).get("direction")
+    if direction not in ("left", "right"):
+        return jsonify({"ok": False, "error": "invalid direction"}), 400
+
+    if direction == "right":
+        add_favorite(listing_id, session["user"].capitalize())
+    else:
+        add_rejected(listing_id)
+
+    _browse_cache["items"] = [item for item in _browse_cache["items"] if item.listing.id != listing_id]
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

@@ -11,13 +11,10 @@ from funda import Funda
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from house_hunter.comparables import recently_sold_comparables  # noqa: E402
 from house_hunter.config import load_config  # noqa: E402
 from house_hunter.email_report import EnrichedListing, build_email_html, send_email  # noqa: E402
-from house_hunter.market import get_market_insights  # noqa: E402
-from house_hunter.poi import distance_to, nearest_place  # noqa: E402
-from house_hunter.pricing import previous_sale  # noqa: E402
-from house_hunter.search import budget_for_label, find_matching_listings, is_under_bid  # noqa: E402
+from house_hunter.enrich import enrich_listing, sort_key  # noqa: E402
+from house_hunter.search import find_matching_listings, is_under_bid  # noqa: E402
 from house_hunter.state import (  # noqa: E402
     classify_listings,
     clicked_listing_ids,
@@ -28,7 +25,6 @@ from house_hunter.state import (  # noqa: E402
     rejected_listing_ids,
     sync_under_bid_listings,
 )
-from house_hunter.vrijescholen import nearest_vrijeschool  # noqa: E402
 
 
 def run(force: bool = False, reason: str = "scheduled") -> None:
@@ -78,76 +74,26 @@ def run(force: bool = False, reason: str = "scheduled") -> None:
                 record_run(reason, "ok", matched_count, 0, "nothing new to send")
                 return
 
-        places = config["poi"]["places"]
-        nearest_types = config["poi"].get("nearest_types", [])
-        mortgage_budget = config["search"].get("mortgage_budget") or {}
-        viewed_ids = clicked_listing_ids([listing.id for listing in notify_listings if listing.id])
-        favorites_by_listing = favorited_by([listing.id for listing in notify_listings if listing.id])
-        enriched: list[EnrichedListing] = []
-        for listing in notify_listings:
-            coords = listing.location.coordinates
-            distances = {}
-            if coords:
-                for place in places:
-                    place_city = place.get("city")
-                    if place_city and listing.city and place_city.lower() != listing.city.lower():
-                        continue  # place is scoped to a different city than this listing
-                    distances[place["name"]] = distance_to(
-                        coords[0], coords[1], place["lat"], place["lng"], mode="bicycling"
-                    )
-                for nearest_type in nearest_types:
-                    found = nearest_place(coords[0], coords[1], nearest_type["google_place_type"])
-                    if found:
-                        name, place_lat, place_lng = found
-                        label = f"{nearest_type['label']} ({name})"
-                        distances[label] = distance_to(
-                            coords[0], coords[1], place_lat, place_lng, mode="bicycling"
-                        )
-
-            price_drop_from = (
-                last_notified_price(listing.id) if events.get(listing.id) == "price_drop" else None
-            )
-
-            school_distance_km = None
-            if coords:
-                school = nearest_vrijeschool(coords[0], coords[1])
-                if school:
-                    school_distance = distance_to(
-                        coords[0], coords[1], school["lat"], school["lng"], mode="bicycling"
-                    )
-                    distances[f"{school['title']} (vrijeschool)"] = school_distance
-                    school_distance_km = school_distance.km
-
-            enriched.append(
-                EnrichedListing(
-                    listing=listing,
-                    distances=distances,
-                    previous_sale=previous_sale(client, listing),
-                    mortgage_budget=budget_for_label(mortgage_budget, listing.energy_label),
-                    market=get_market_insights(client, listing.city, listing.address.neighbourhood),
-                    comparables=recently_sold_comparables(client, listing),
-                    price_drop_from=price_drop_from,
-                    school_distance_km=school_distance_km,
-                    max_school_distance_km=config["search"].get("max_school_distance_km"),
-                    already_viewed=listing.id in viewed_ids,
-                    is_new=events.get(listing.id) == "new",
-                    favorited_by=favorites_by_listing.get(listing.id, set()),
+            viewed_ids = clicked_listing_ids([listing.id for listing in notify_listings if listing.id])
+            favorites_by_listing = favorited_by([listing.id for listing in notify_listings if listing.id])
+            enriched: list[EnrichedListing] = []
+            for listing in notify_listings:
+                price_drop_from = (
+                    last_notified_price(listing.id) if events.get(listing.id) == "price_drop" else None
                 )
-            )
+                enriched.append(
+                    enrich_listing(
+                        client,
+                        listing,
+                        config,
+                        price_drop_from=price_drop_from,
+                        already_viewed=listing.id in viewed_ids,
+                        is_new=events.get(listing.id) == "new",
+                        favorited_by_people=favorites_by_listing.get(listing.id, set()),
+                    )
+                )
 
-        max_school_distance_km = config["search"].get("max_school_distance_km")
-
-        def _sort_key(item: EnrichedListing) -> tuple[int, float]:
-            within_range = (
-                max_school_distance_km is None
-                or item.school_distance_km is None
-                or item.school_distance_km <= max_school_distance_km
-            )
-            fallback = min((d.km for d in item.distances.values()), default=999)
-            primary_distance = item.school_distance_km if item.school_distance_km is not None else fallback
-            return (0 if within_range else 1, primary_distance)
-
-        enriched.sort(key=_sort_key)
+        enriched.sort(key=sort_key(config))
 
         cities = sorted({item.listing.city for item in enriched if item.listing.city})
         locations = ", ".join(cities) if cities else ", ".join(
@@ -172,6 +118,44 @@ def run(force: bool = False, reason: str = "scheduled") -> None:
     except Exception as exc:
         record_run(reason, "error", matched_count, 0, str(exc))
         raise
+
+
+def browse_listings(config: dict | None = None) -> list[EnrichedListing]:
+    """Full enrichment for every currently active, non-rejected matching
+    listing (not just new/price-dropped ones) - used by the /houses
+    swipe page. Independent of the email dedup state, but respects
+    "not interested" rejections and skips under-bid listings.
+    """
+    config = config or load_config()
+    with Funda() as client:
+        listings = find_matching_listings(client, config)
+        available_listings = [listing for listing in listings if not is_under_bid(listing)]
+        rejected_ids = rejected_listing_ids([listing.id for listing in available_listings if listing.id])
+        browsable = [listing for listing in available_listings if listing.id not in rejected_ids]
+
+        events = classify_listings([(listing.id, listing.price.amount) for listing in browsable if listing.id])
+        viewed_ids = clicked_listing_ids([listing.id for listing in browsable if listing.id])
+        favorites_by_listing = favorited_by([listing.id for listing in browsable if listing.id])
+
+        enriched: list[EnrichedListing] = []
+        for listing in browsable:
+            price_drop_from = (
+                last_notified_price(listing.id) if events.get(listing.id) == "price_drop" else None
+            )
+            enriched.append(
+                enrich_listing(
+                    client,
+                    listing,
+                    config,
+                    price_drop_from=price_drop_from,
+                    already_viewed=listing.id in viewed_ids,
+                    is_new=events.get(listing.id) == "new",
+                    favorited_by_people=favorites_by_listing.get(listing.id, set()),
+                )
+            )
+
+    enriched.sort(key=sort_key(config))
+    return enriched
 
 
 if __name__ == "__main__":
