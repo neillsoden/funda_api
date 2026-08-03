@@ -31,6 +31,7 @@ from house_hunter.state import (  # noqa: E402
     all_favorited_listing_ids,
     favorited_by,
     record_click,
+    recent_run_logs,
     rejected_listing_ids,
     remove_favorite,
     remove_rejected,
@@ -77,7 +78,7 @@ def _run_pipeline_in_background(force: bool = False) -> None:
     buffer = io.StringIO()
     try:
         with redirect_stdout(buffer):
-            run_pipeline(force=force)
+            run_pipeline(force=force, reason="force" if force else "manual")
     except Exception as exc:  # noqa: BLE001 - surface any failure in the UI rather than losing it
         buffer.write(f"\nFAILED: {exc}")
     finally:
@@ -415,6 +416,14 @@ def onder_bod():
                 except FundaError:
                     continue
     return render_template("onder_bod.html", listings=listings)
+
+
+@app.route("/logs", methods=["GET"])
+@login_required
+def logs():
+    """Run history for the last 7 days - when the pipeline fired, why
+    (startup/scheduled/manual/force), and what happened."""
+    return render_template("logs.html", logs=recent_run_logs())
 
 
 if __name__ == "__main__":

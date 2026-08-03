@@ -88,6 +88,19 @@ def _connect():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS run_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                triggered_at TEXT NOT NULL DEFAULT (datetime('now')),
+                reason TEXT NOT NULL,
+                status TEXT NOT NULL,
+                matched_count INTEGER,
+                sent_count INTEGER,
+                detail TEXT
+            )
+            """
+        )
         yield conn
         conn.commit()
     finally:
@@ -279,3 +292,48 @@ def under_bid_listing_ids() -> list[str]:
             "SELECT listing_id FROM under_bid_listings ORDER BY first_seen_at DESC"
         )
         return [row[0] for row in rows]
+
+
+def record_run(
+    reason: str,
+    status: str,
+    matched_count: int | None = None,
+    sent_count: int | None = None,
+    detail: str | None = None,
+) -> None:
+    """Log one pipeline run (reason: startup/scheduled/manual/force, status:
+    ok/error), and prune anything older than 7 days so the log doesn't grow
+    forever."""
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO run_log (triggered_at, reason, status, matched_count, sent_count, detail)
+            VALUES (datetime('now'), ?, ?, ?, ?, ?)
+            """,
+            (reason, status, matched_count, sent_count, detail),
+        )
+        conn.execute("DELETE FROM run_log WHERE triggered_at < datetime('now', '-7 days')")
+
+
+def recent_run_logs() -> list[dict]:
+    """Run log entries from the last 7 days, most recent first."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT triggered_at, reason, status, matched_count, sent_count, detail
+            FROM run_log
+            WHERE triggered_at >= datetime('now', '-7 days')
+            ORDER BY triggered_at DESC
+            """
+        ).fetchall()
+        return [
+            {
+                "triggered_at": row[0],
+                "reason": row[1],
+                "status": row[2],
+                "matched_count": row[3],
+                "sent_count": row[4],
+                "detail": row[5],
+            }
+            for row in rows
+        ]

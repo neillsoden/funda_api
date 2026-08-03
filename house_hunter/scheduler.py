@@ -37,12 +37,14 @@ def _seconds_until_next_time(times: list[str], tz_name: str) -> tuple[float, str
 
 
 def main() -> None:
+    first_run = True
     while True:
         try:
-            run()
+            run(reason="startup" if first_run else "scheduled")
         except Exception:
             print("house_hunter run failed:")
             traceback.print_exc()
+        first_run = False
 
         schedule = load_config()["schedule"]
         times = [t for t in (schedule.get("times") or []) if t.strip()]
