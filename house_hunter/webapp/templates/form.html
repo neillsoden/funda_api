@@ -2,11 +2,11 @@
 {% block title %}Preferences — House Hunter{% endblock %}
 {% block head %}
 <style>
-  .place-box { border: 1px solid var(--gray-200); border-radius: 10px; padding: 14px; margin-top: 10px; position: relative; }
-  .place-row { display: grid; grid-template-columns: 1.5fr 2fr 1fr; gap: 8px; }
+  .place-box { border: 1px solid var(--gray-200); border-radius: 10px; padding: 38px 14px 14px 14px; margin-top: 10px; position: relative; }
+  .place-row { display: grid; grid-template-columns: 1fr 1.6fr 0.9fr; gap: 8px; }
   .place-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
   .place-row label, .place-row-2 label { margin-top: 0; }
-  .place-box .btn-remove { position: absolute; top: 12px; right: 12px; }
+  .place-box .btn-remove { position: absolute; top: 8px; right: 8px; height: 26px; line-height: 24px; padding: 0 10px; font-size: 0.7rem; margin-top: 0; }
   .run-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
   .run-card .status { font-size: 0.85rem; color: var(--gray-500); }
   .run-card .status.running { color: var(--red); font-weight: 600; }
@@ -20,7 +20,8 @@
     .run-card > div:last-child { display: flex; flex-direction: column; gap: 10px; }
     .run-card > div:last-child form { width: 100%; }
     .run-card button { width: 100%; }
-    .place-box .btn-remove { position: static; display: block; margin: 10px 0 0 auto; width: auto; }
+    .place-box { padding: 14px; }
+    .place-box .btn-remove { position: static; display: block; margin: 10px 0 0 auto; width: auto; height: 32px; line-height: 30px; }
   }
 </style>
 {% if run_status.running %}<meta http-equiv="refresh" content="4">{% endif %}
