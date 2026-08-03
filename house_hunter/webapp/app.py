@@ -140,6 +140,7 @@ def form():
         object_type_options=OBJECT_TYPE_OPTIONS,
         last_saved=_last_saved,
         run_status=_run_status,
+        recent_logs=recent_run_logs()[:5],
         errors=[],
     )
 
@@ -283,6 +284,8 @@ def save():
             category_options=CATEGORY_OPTIONS,
             object_type_options=OBJECT_TYPE_OPTIONS,
             last_saved=_last_saved,
+            run_status=_run_status,
+            recent_logs=recent_run_logs()[:5],
             errors=errors,
         )
 

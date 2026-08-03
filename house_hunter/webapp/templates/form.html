@@ -48,6 +48,31 @@
     <div class="run-output">{{ run_status.output }}</div>
   {% endif %}
 
+  {% if recent_logs %}
+    <div class="card" style="padding:0;overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+        <tr>
+          <th style="text-align:left;color:var(--gray-500);font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;padding:10px 14px;border-bottom:1px solid var(--gray-200);">Time (UTC)</th>
+          <th style="text-align:left;color:var(--gray-500);font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;padding:10px 14px;border-bottom:1px solid var(--gray-200);">Trigger</th>
+          <th style="text-align:left;color:var(--gray-500);font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;padding:10px 14px;border-bottom:1px solid var(--gray-200);">Sent</th>
+          <th style="text-align:left;color:var(--gray-500);font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;padding:10px 14px;border-bottom:1px solid var(--gray-200);">Detail</th>
+        </tr>
+        {% for entry in recent_logs %}
+        <tr>
+          <td style="padding:10px 14px;border-bottom:1px solid var(--gray-100);">{{ entry.triggered_at }}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid var(--gray-100);">
+            <span style="display:inline-block;background:var(--gray-100);color:var(--gray-600);font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:0.03em;">{{ entry.reason }}</span>
+            {% if entry.status == 'error' %}<span style="display:inline-block;background:var(--red-tint);color:var(--red-dark);font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:0.03em;margin-left:4px;">error</span>{% endif %}
+          </td>
+          <td style="padding:10px 14px;border-bottom:1px solid var(--gray-100);">{{ entry.sent_count if entry.sent_count is not none else '—' }}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid var(--gray-100);color:var(--gray-500);">{{ entry.detail or '' }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      <div style="padding:10px 14px;"><a href="{{ url_for('logs') }}" style="font-size:0.85rem;font-weight:700;">View full log &rarr;</a></div>
+    </div>
+  {% endif %}
+
   {% if errors %}
     <div class="errors">
       <strong>Please fix the following:</strong>
