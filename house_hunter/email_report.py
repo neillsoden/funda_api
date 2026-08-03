@@ -206,6 +206,22 @@ def _market_group(item: EnrichedListing) -> str:
     return "".join(parts) + comps_html
 
 
+def _price_budget_color(price: int | None, budget: int | None) -> str:
+    """Color the headline price by how it sits against the mortgage budget for
+    this listing's energy label: comfortably under / cutting it close / over
+    budget. Falls back to the neutral blue when there's no budget to compare
+    against (e.g. mortgage_budget not configured for that energy label).
+    """
+    if price is None or budget is None:
+        return "#1967d2"
+    margin = budget - price
+    if margin < 0:
+        return "#d93025"  # over budget - red
+    if margin <= budget * 0.05:
+        return "#f9ab00"  # within 5% of budget - amber, cutting it close
+    return "#137333"  # comfortably under budget - green
+
+
 def _price_drop_banner(item: EnrichedListing) -> str:
     if item.price_drop_from is None or item.listing.price.amount is None:
         return ""
@@ -387,8 +403,9 @@ def _row_html(item: EnrichedListing, public_base_url: str = "", people: list[str
           <a href="{link_url}" style="color:#202124;text-decoration:none;font-size:17px;font-weight:700;">{listing.title}</a>
           <div style="color:#5f6368;font-size:13px;margin:2px 0 10px 0;">{_icon("place", 12)}{listing.address.neighbourhood + ', ' if listing.address.neighbourhood else ''}{listing.city}</div>
           <div style="margin-bottom:12px;">
-            <span style="color:#1967d2;font-size:22px;font-weight:700;">{price}</span>
+            <span style="color:{_price_budget_color(listing.price.amount, item.mortgage_budget)};font-size:22px;font-weight:700;">{price}</span>
             {f'<span style="color:#5f6368;font-size:13px;margin-left:8px;">{area_text}</span>' if area_text else ''}
+            {f'<div style="color:{_price_budget_color(listing.price.amount, item.mortgage_budget)};font-size:12px;font-weight:600;margin-top:2px;">of €{item.mortgage_budget:,} budget</div>' if item.mortgage_budget is not None and listing.price.amount is not None else ''}
           </div>
           {groups}
         </td>
