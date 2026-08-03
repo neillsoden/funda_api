@@ -63,7 +63,15 @@
   .controls .btn-like svg { fill: #1e8e3e; }
   .controls button svg { pointer-events: none; width: 20px; height: 20px; }
   @media (max-width: 480px) {
-    .deck { height: 62vh; min-height: 380px; }
+    .wrap { padding-top: 12px; padding-bottom: 10px; }
+    h1 { display: none; }
+    .refresh-row { margin-bottom: 6px; }
+    .tabs { margin-bottom: 6px; }
+    .deck { height: calc(100dvh - 200px); min-height: 300px; max-height: 480px; }
+    .swipe-card img.photo { height: 120px; }
+    .controls { margin-top: 8px; gap: 14px; }
+    .controls button { width: 40px; height: 40px; }
+    .controls button svg { width: 18px; height: 18px; }
   }
 </style>
 {% if running %}<meta http-equiv="refresh" content="6">{% endif %}
