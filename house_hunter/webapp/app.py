@@ -137,62 +137,63 @@ def _refresh_browse_cache() -> None:
 
 def _card_view(item) -> dict:
     """Flatten an EnrichedListing into plain display fields the houses.html
-    template can render without needing Python helpers - same information
-    the email cards show."""
+    template can render without needing Python helpers - short, icon-led
+    versions of the same information the email cards show (the swipe deck
+    has much less room per card than an email)."""
     listing = item.listing
     price_color = _price_budget_color(listing.price.amount, item.mortgage_budget)
     energy_bg = _energy_color(listing.energy_label)
+    accent_color = _school_proximity_color(item.school_distance_km, item.max_school_distance_km)
 
     other_distances, school_entry = _split_school_distance(item.distances)
 
     school = None
     if school_entry:
         _, school_dist = school_entry
+        within_range = (
+            item.max_school_distance_km is None or school_dist.km <= item.max_school_distance_km
+        )
+        full_text = (
+            f"{school_dist.km:.1f} km ({school_dist.duration_text}) to nearest vrijeschool"
+            if school_dist.duration_text
+            else f"{school_dist.km:.1f} km to nearest vrijeschool"
+        )
         school = {
-            "text": (
-                f"{school_dist.km:.1f} km ({school_dist.duration_text}) to school"
-                if school_dist.duration_text
-                else f"{school_dist.km:.1f} km to school"
-            ),
+            "km_text": f"{school_dist.km:.1f} km",
             "href": _maps_directions_url(listing.location.coordinates, school_dist),
+            "title": full_text,
+            "ok": within_range,
         }
 
-    within_range = None
-    if item.school_distance_km is not None and item.max_school_distance_km is not None:
-        ok = item.school_distance_km <= item.max_school_distance_km
-        within_range = {
-            "ok": ok,
-            "text": f"{'Within' if ok else 'Outside'} {item.max_school_distance_km:g}km biking distance",
-        }
-
-    distance_chips = [
-        {
-            "text": (
-                f"{dist.km:.1f} km ({dist.duration_text}) · {name}"
-                if dist.duration_text
-                else f"{dist.km:.1f} km · {name}"
-            ),
-            "href": _maps_directions_url(listing.location.coordinates, dist),
-        }
-        for name, dist in other_distances.items()
-    ]
+    distance_chips = []
+    for name, dist in other_distances.items():
+        # "Nearest train station (Arnhem Velperpoort)" -> just the place name
+        short_name = name.split("(", 1)[1].rstrip(")") if "(" in name else name
+        full_text = f"{dist.km:.1f} km ({dist.duration_text}) to {name}" if dist.duration_text else f"{dist.km:.1f} km to {name}"
+        distance_chips.append(
+            {
+                "km_text": f"{dist.km:.1f} km",
+                "name": short_name,
+                "href": _maps_directions_url(listing.location.coordinates, dist),
+                "title": full_text,
+            }
+        )
 
     listed_date, days_listed = _days_listed(listing)
-    listed_text = f"Listed {listed_date} ({days_listed}d ago)" if listed_date else "Listed date unknown"
-    sold_text = (
-        f"Last sold €{item.previous_sale.price:,} ({item.previous_sale.date})"
-        if item.previous_sale
-        else "No previous sale on record"
-    )
+    listed_short = f"{days_listed}d ago" if days_listed is not None else None
+    listed_title = f"Listed {listed_date}" if listed_date else "Listed date unknown"
 
-    budget_text = None
+    sold_short = None
+    sold_title = None
+    if item.previous_sale:
+        sold_short = f"€{round(item.previous_sale.price / 1000)}k ({item.previous_sale.date[:4]})"
+        sold_title = f"Last sold €{item.previous_sale.price:,} ({item.previous_sale.date})"
+
     budget_total_text = None
     if item.mortgage_budget is not None and listing.price.amount is not None:
-        margin = item.mortgage_budget - listing.price.amount
-        budget_text = f"€{margin:,} under budget (max €{item.mortgage_budget:,})"
         budget_total_text = f"€{item.mortgage_budget:,}"
 
-    market_text = None
+    market = None
     if item.market and item.market.get("avg_asking_price_per_m2") and listing.living_area:
         avg_per_m2 = item.market["avg_asking_price_per_m2"]
         listing_per_m2 = round(listing.price.amount / listing.living_area) if listing.price.amount else None
@@ -200,9 +201,10 @@ def _card_view(item) -> dict:
             diff_pct = round((listing_per_m2 - avg_per_m2) / avg_per_m2 * 100)
             neighbourhood = item.market.get("neighbourhood", "area")
             below = diff_pct <= 0
-            market_text = {
+            market = {
                 "ok": below,
-                "text": (
+                "short_text": f"{abs(diff_pct)}% {'below' if below else 'above'} avg",
+                "title": (
                     f"€{listing_per_m2:,}/m² · {abs(diff_pct)}% "
                     f"{'below' if below else 'above'} {neighbourhood} avg (€{avg_per_m2:,}/m²)"
                 ),
@@ -215,7 +217,7 @@ def _card_view(item) -> dict:
             "price": comp.price,
             "price_per_m2": comp.price_per_m2,
         }
-        for comp in item.comparables
+        for comp in item.comparables[:2]
     ]
 
     area_parts = []
@@ -233,7 +235,6 @@ def _card_view(item) -> dict:
         "neighbourhood": listing.address.neighbourhood,
         "price": f"€{listing.price.amount:,}" if listing.price.amount else "price unknown",
         "price_color": price_color,
-        "budget_text": budget_text,
         "budget_total_text": budget_total_text,
         "area_text": " · ".join(area_parts),
         "bedrooms": listing.bedrooms,
@@ -241,13 +242,14 @@ def _card_view(item) -> dict:
         "energy_bg": energy_bg,
         "energy_text": _contrast_text_color(energy_bg),
         "school": school,
-        "within_range": within_range,
         "distance_chips": distance_chips,
-        "listed_text": listed_text,
-        "sold_text": sold_text,
-        "market": market_text,
+        "listed_short": listed_short,
+        "listed_title": listed_title,
+        "sold_short": sold_short,
+        "sold_title": sold_title,
+        "market": market,
         "comparables": comparables,
-        "accent_color": _school_proximity_color(item.school_distance_km, item.max_school_distance_km),
+        "accent_color": accent_color,
         "is_new": item.is_new,
         "price_drop_from": item.price_drop_from,
         "already_viewed": item.already_viewed,
