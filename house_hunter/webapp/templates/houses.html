@@ -167,9 +167,12 @@
     }
 
     function topCard(deckIndex) {
+      // The first card in DOM order has the highest z-index (see the
+      // items|length - loop.index0 style attr), so it's the visual top of
+      // the stack - not the last DOM child.
       const deck = document.getElementById(`deck-${deckIndex}`);
       const cards = deck.querySelectorAll('.swipe-card');
-      return cards.length ? cards[cards.length - 1] : null;
+      return cards.length ? cards[0] : null;
     }
 
     function afterCardRemoved(deckIndex) {
@@ -204,7 +207,7 @@
       const nopeStamp = card.querySelector('.stamp.nope');
 
       function onDown(e) {
-        if (card.parentElement.querySelectorAll('.swipe-card')[card.parentElement.querySelectorAll('.swipe-card').length - 1] !== card) return;
+        if (card.parentElement.querySelectorAll('.swipe-card')[0] !== card) return;
         dragging = true;
         startX = e.clientX; startY = e.clientY;
         card.style.transition = 'none';
