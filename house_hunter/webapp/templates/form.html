@@ -13,6 +13,15 @@
   .run-output { margin-top: 14px; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px;
     padding: 12px 14px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.78rem; color: var(--gray-600);
     white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
+  @media (max-width: 600px) {
+    .place-row { grid-template-columns: 1fr; }
+    .place-row-2 { grid-template-columns: 1fr 1fr; }
+    .run-card { flex-direction: column; align-items: stretch; }
+    .run-card > div:last-child { display: flex; flex-direction: column; gap: 10px; }
+    .run-card > div:last-child form { width: 100%; }
+    .run-card button { width: 100%; }
+    .place-box .btn-remove { position: static; display: block; margin: 10px 0 0 auto; width: auto; }
+  }
 </style>
 {% if run_status.running %}<meta http-equiv="refresh" content="4">{% endif %}
 {% endblock %}

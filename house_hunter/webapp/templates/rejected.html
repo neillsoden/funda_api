@@ -9,6 +9,10 @@
   .listing-card .meta { color: var(--gray-500); font-size: 0.85rem; margin-top: 4px; }
   .listing-card .price { color: var(--red); font-weight: 700; margin-top: 4px; }
   .undo { color: var(--red); font-size: 0.85rem; text-decoration: none; white-space: nowrap; }
+  @media (max-width: 600px) {
+    .listing-card { flex-wrap: wrap; }
+    .listing-card img { width: 76px; height: 60px; }
+  }
 </style>
 {% endblock %}
 {% block content %}

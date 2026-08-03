@@ -13,6 +13,9 @@
   .badge-error { background: var(--red-tint); color: var(--red-dark); }
   .reason-badge { background: var(--gray-100); color: var(--gray-600); }
   .detail { color: var(--gray-500); }
+  @media (max-width: 600px) {
+    table.log-table th, table.log-table td { padding: 8px; white-space: nowrap; }
+  }
 </style>
 {% endblock %}
 {% block content %}

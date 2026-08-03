@@ -10,6 +10,10 @@
   .listing-card .price { color: var(--red); font-weight: 700; margin-top: 4px; }
   .badge { display: inline-block; background: #fff8e1; color: #8a6d00; font-size: 0.72rem; font-weight: 700;
     padding: 3px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; }
+  @media (max-width: 600px) {
+    .listing-card { flex-wrap: wrap; }
+    .listing-card img { width: 76px; height: 60px; }
+  }
 </style>
 {% endblock %}
 {% block content %}
