@@ -80,6 +80,7 @@ app.config.update(
 FREQUENCY_OPTIONS = ["hourly", "twice_daily", "daily", "weekly"]
 CATEGORY_OPTIONS = ["buy", "rent"]
 OBJECT_TYPE_OPTIONS = ["house", "apartment"]
+_ENERGY_LABEL_ORDER = ["A++++", "A+++", "A++", "A+", "A", "B", "C", "D", "E", "F", "G"]
 APARTMENTS_INTERVAL_OPTIONS = [
     (10, "Every 10 minutes"),
     (15, "Every 15 minutes"),
@@ -667,6 +668,15 @@ def apartments():
         card["condition_tag"] = tags.get(card["id"])
         card["viewed"] = card["id"] in viewed_ids
         card["tracked_url"] = f"/click/{card['id']}?to={quote(card['url'], safe='')}"
+        # For client-side sorting: numeric energy rank (0 = best, A++++) and
+        # the nearest school's minutes (schools list is already sorted
+        # nearest-first by apartments.py).
+        card["energy_rank"] = (
+            _ENERGY_LABEL_ORDER.index(card["energy_label"])
+            if card["energy_label"] in _ENERGY_LABEL_ORDER
+            else len(_ENERGY_LABEL_ORDER)
+        )
+        card["nearest_school_minutes"] = card["schools"][0]["minutes"] if card["schools"] else 999
 
     tag_filter, viewed_filter = get_apartment_filter_prefs(session["user"])
 

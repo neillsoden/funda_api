@@ -21,6 +21,7 @@
   .filter-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .filter-label { font-size: 0.64rem; font-weight: 800; color: var(--gray-500); text-transform: uppercase;
     letter-spacing: 0.04em; min-width: 58px; flex-shrink: 0; }
+  #sort-select { width: auto; height: 30px; font-size: 0.72rem; padding: 0 28px 0 10px; border-radius: 8px; }
 
   .apt-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
   @media (max-width: 900px) { .apt-grid { grid-template-columns: repeat(3, 1fr); } }
@@ -158,10 +159,23 @@
           <button type="button" class="{{ 'active' if initial_viewed_filter == 'not_viewed' }}" data-filter="not_viewed" onclick="setViewedFilter('not_viewed')">Not viewed</button>
         </div>
       </div>
+      <div class="filter-group">
+        <span class="filter-label">Sort</span>
+        <select id="sort-select" onchange="setSort(this.value)">
+          <option value="default">Newest found first</option>
+          <option value="bedrooms">Bedrooms (most first)</option>
+          <option value="energy">Energy rating (best first)</option>
+          <option value="school">Distance to school (closest first)</option>
+          <option value="city">City (A-Z)</option>
+        </select>
+      </div>
     </div>
     <div class="apt-grid" id="apt-grid">
       {% for c in cards %}
-        <div class="apt-card" data-id="{{ c.id }}" data-tag="{{ c.condition_tag or '' }}" data-viewed="{{ '1' if c.viewed else '0' }}">
+        <div class="apt-card" data-id="{{ c.id }}" data-tag="{{ c.condition_tag or '' }}" data-viewed="{{ '1' if c.viewed else '0' }}"
+             data-bedrooms="{{ c.bedrooms or 0 }}" data-energy-rank="{{ c.energy_rank }}"
+             data-school-minutes="{{ c.nearest_school_minutes }}" data-city="{{ (c.city or '')|lower }}"
+             style="order: {{ loop.index0 }};">
           <div class="photo-wrap">
             <img class="photo" src="{{ c.photo }}">
             <div class="scrim"></div>
@@ -290,6 +304,24 @@
           (viewedFilter === 'not_viewed' && !viewed);
         card.classList.toggle('filtered-out', !(tagOk && viewedOk));
       });
+    }
+
+    function setSort(mode) {
+      const cards = Array.from(document.querySelectorAll('.apt-card'));
+      const originalOrder = new Map(cards.map((card, i) => [card, i]));
+      const sortKey = {
+        default: (card) => originalOrder.get(card),
+        bedrooms: (card) => -Number(card.dataset.bedrooms),
+        energy: (card) => Number(card.dataset.energyRank),
+        school: (card) => Number(card.dataset.schoolMinutes),
+        city: (card) => card.dataset.city,
+      }[mode];
+      cards
+        .sort((a, b) => {
+          const ka = sortKey(a), kb = sortKey(b);
+          return ka < kb ? -1 : ka > kb ? 1 : 0;
+        })
+        .forEach((card, i) => { card.style.order = i; });
     }
 
     applyFilter();
