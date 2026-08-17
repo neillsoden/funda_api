@@ -147,6 +147,16 @@ def _connect():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS school_favorites (
+                school_id TEXT NOT NULL,
+                person TEXT NOT NULL,
+                favorited_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (school_id, person)
+            )
+            """
+        )
         yield conn
         conn.commit()
     finally:
@@ -526,3 +536,40 @@ def get_apartment_filter_prefs(username: str) -> tuple[str, str]:
             (username,),
         ).fetchone()
     return (row[0], row[1]) if row else ("all", "all")
+
+
+def toggle_school_favorite(school_id: str, person: str) -> bool:
+    """Favorites the school for this person if not already, otherwise
+    unfavorites it. Returns the new state (True = now favorited)."""
+    with _connect() as conn:
+        existing = conn.execute(
+            "SELECT 1 FROM school_favorites WHERE school_id = ? AND person = ?", (school_id, person)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "DELETE FROM school_favorites WHERE school_id = ? AND person = ?", (school_id, person)
+            )
+            return False
+        conn.execute(
+            "INSERT INTO school_favorites (school_id, person, favorited_at) VALUES (?, ?, datetime('now'))",
+            (school_id, person),
+        )
+        return True
+
+
+def school_favorited_by(school_ids: list[str]) -> dict[str, set[str]]:
+    """{school_id: {person, ...}} for whichever of these schools have at
+    least one favorite. Shared/visible to everyone, same as listing
+    favorites."""
+    if not school_ids:
+        return {}
+    with _connect() as conn:
+        placeholders = ",".join("?" for _ in school_ids)
+        rows = conn.execute(
+            f"SELECT school_id, person FROM school_favorites WHERE school_id IN ({placeholders})",
+            school_ids,
+        )
+        result: dict[str, set[str]] = {}
+        for school_id, person in rows:
+            result.setdefault(school_id, set()).add(person)
+        return result

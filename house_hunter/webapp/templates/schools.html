@@ -3,51 +3,76 @@
 {% block head %}
 <style>
   .city-group { margin-top: 2rem; }
-  .city-group h2 { margin-top: 0; }
+  .city-group h2 { margin-top: 0; display: flex; align-items: baseline; gap: 10px; }
+  .city-group .counts { font-size: 0.72rem; font-weight: 600; color: var(--gray-500); text-transform: none; letter-spacing: 0; border: none; padding: 0; }
   .school-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--gray-100); }
   .school-row:last-child { border-bottom: none; }
+  .school-row.is-favorited { background: #fff8e1; margin: 0 -14px; padding: 12px 14px; border-radius: 10px; border-bottom: none; }
   .school-row .name { font-weight: 600; color: var(--ink); }
   .school-row .addr { color: var(--gray-500); font-size: 0.82rem; margin-top: 2px; }
   .school-row .link { flex-shrink: 0; font-size: 0.85rem; font-weight: 700; text-decoration: none; color: var(--red); }
   .school-row .link:hover { text-decoration: underline; }
   .no-link { color: var(--gray-500); font-size: 0.85rem; }
-  .school-row .name-row { display: flex; align-items: center; gap: 8px; }
+  .school-row .name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .edu-badge { font-size: 0.66rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
   .edu-badge.primary { background: #e8f0fe; color: #1967d2; }
   .edu-badge.secondary { background: #fce8e6; color: #c5221f; }
   .edu-badge.other { background: var(--gray-100); color: var(--gray-600); }
+  .fav-badge { font-size: 0.66rem; font-weight: 700; color: #8a6d00; }
+  .school-row .actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .fav-btn { margin: 0; height: 30px; width: 30px; padding: 0; border-radius: 50%; border: 1.5px solid var(--gray-200);
+    background: #fff; box-shadow: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .fav-btn svg { width: 15px; height: 15px; fill: var(--gray-400); }
+  .fav-btn.active { background: #fff8e1; border-color: #f4d35e; }
+  .fav-btn.active svg { fill: #f9ab00; }
 </style>
 {% endblock %}
 {% block content %}
+  {% macro star_icon() %}<svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>{% endmacro %}
   <h1>Schools</h1>
-  <p class="hint">Every vrijeschool (Waldorf/Steiner school) from the vrijescholen.nl directory, grouped by city.</p>
+  <p class="hint">Every vrijeschool (Waldorf/Steiner school) from the vrijescholen.nl directory, grouped by city. Favorited schools always float to the top of their city.</p>
   {% if not grouped %}
     <div class="card"><p class="hint" style="margin:0;">No schools cached yet.</p></div>
   {% endif %}
   {% for city, schools in grouped.items() %}
     <div class="city-group">
-      <h2>{{ city }}</h2>
+      <h2>{{ city }} <span class="counts">{{ counts[city].primary }} primary · {{ counts[city].secondary }} high school{{ 's' if counts[city].secondary != 1 }}</span></h2>
       <div class="card">
         {% for school in schools %}
-          <div class="school-row">
+          <div class="school-row {{ 'is-favorited' if school.favorited_by }}">
             <div>
               <div class="name-row">
                 <div class="name">{{ school.title }}</div>
                 {% if school.education_label %}<span class="edu-badge {{ school.education_kind }}">{{ school.education_label }}</span>{% endif %}
+                {% if school.favorited_by %}<span class="fav-badge">&#9733; {{ school.favorited_by|join(', ') }}</span>{% endif %}
               </div>
               {% if school.street %}
                 <div class="addr">{{ school.street }} {{ school.housenumber or '' }}{% if school.postcode %}, {{ school.postcode }}{% endif %}</div>
               {% endif %}
             </div>
-            {% set link = school.website or school.permalink %}
-            {% if link %}
-              <a class="link" href="{{ link }}" target="_blank" rel="noopener">Website &#8599;</a>
-            {% else %}
-              <span class="no-link">No website</span>
-            {% endif %}
+            <div class="actions">
+              <button type="button" class="fav-btn {{ 'active' if school.favorited_by }}" onclick="toggleSchoolFavorite('{{ school.id }}', this)" aria-label="Favorite">{{ star_icon() }}</button>
+              {% set link = school.website or school.permalink %}
+              {% if link %}
+                <a class="link" href="{{ link }}" target="_blank" rel="noopener">Website &#8599;</a>
+              {% else %}
+                <span class="no-link">No website</span>
+              {% endif %}
+            </div>
           </div>
         {% endfor %}
       </div>
     </div>
   {% endfor %}
+  <script>
+    function toggleSchoolFavorite(schoolId, button) {
+      fetch(`/schools/favorite/${schoolId}`, { method: 'POST' })
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data.ok) return;
+          button.classList.toggle('active', data.favorited);
+          location.reload();
+        });
+    }
+  </script>
 {% endblock %}

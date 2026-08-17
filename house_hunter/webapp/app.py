@@ -52,7 +52,9 @@ from house_hunter.state import (  # noqa: E402
     remove_nl_apartment_match,
     remove_rejected,
     save_apartment_filter_prefs,
+    school_favorited_by,
     set_condition_tag,
+    toggle_school_favorite,
     under_bid_listing_ids,
 )
 from house_hunter.vrijescholen import list_all_schools  # noqa: E402
@@ -565,13 +567,38 @@ _EDUCATION_TYPE_LABELS = {
 @login_required
 def schools():
     all_schools = list_all_schools()
+    favorites = school_favorited_by([school["id"] for school in all_schools])
+
     grouped: dict[str, list[dict]] = {}
+    counts: dict[str, dict[str, int]] = {}
     for school in all_schools:
         label, kind = _EDUCATION_TYPE_LABELS.get(school["education_type"], (None, None))
         school["education_label"] = label
         school["education_kind"] = kind
-        grouped.setdefault(school["city"] or "Unknown", []).append(school)
-    return render_template("schools.html", grouped=dict(sorted(grouped.items())))
+        school["favorited_by"] = sorted(favorites.get(school["id"], set()))
+        city = school["city"] or "Unknown"
+        grouped.setdefault(city, []).append(school)
+        city_counts = counts.setdefault(city, {"primary": 0, "secondary": 0})
+        if kind == "primary":
+            city_counts["primary"] += 1
+        elif kind == "secondary":
+            city_counts["secondary"] += 1
+
+    # Favorited schools always float to the top of their city group;
+    # otherwise keep the existing alphabetical order from list_all_schools().
+    for city_schools in grouped.values():
+        city_schools.sort(key=lambda school: 0 if school["favorited_by"] else 1)
+
+    return render_template(
+        "schools.html", grouped=dict(sorted(grouped.items())), counts=counts
+    )
+
+
+@app.route("/schools/favorite/<school_id>", methods=["POST"])
+@login_required
+def schools_favorite(school_id: str):
+    now_favorited = toggle_school_favorite(school_id, session["user"].capitalize())
+    return jsonify({"ok": True, "favorited": now_favorited})
 
 
 @app.route("/onder-bod", methods=["GET"])

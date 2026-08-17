@@ -192,13 +192,14 @@ def list_all_schools() -> list[dict]:
     with _connect() as conn:
         rows = conn.execute(
             """
-            SELECT title, city, street, housenumber, postcode, education_type, website, permalink
+            SELECT id, title, city, street, housenumber, postcode, education_type, website, permalink
             FROM vrijescholen
             ORDER BY city, title
             """
         ).fetchall()
     return [
         {
+            "id": school_id,
             "title": title,
             "city": city,
             "street": street,
@@ -208,5 +209,5 @@ def list_all_schools() -> list[dict]:
             "website": website,
             "permalink": permalink,
         }
-        for title, city, street, housenumber, postcode, education_type, website, permalink in rows
+        for school_id, title, city, street, housenumber, postcode, education_type, website, permalink in rows
     ]
