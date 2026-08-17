@@ -73,7 +73,7 @@
     background: #fff; color: var(--gray-600); cursor: pointer; text-decoration: none;
     display: flex; align-items: center; justify-content: center; gap: 4px;
   }
-  .tag-row button svg, .apt-actions button svg, .apt-actions a svg { width: 13px; height: 13px; flex-shrink: 0; pointer-events: none; }
+  .tag-row button svg, .apt-actions button svg, .apt-actions a svg { width: 16px; height: 16px; flex-shrink: 0; pointer-events: none; }
   .tag-row button.tag-needs_work.active { background: #fce8e6; color: #c5221f; border-color: #f6c6c1; }
   .tag-row button.tag-move_in_ready.active { background: #e6f4ea; color: #146c2e; border-color: #b7dfc0; }
   .apt-actions .btn-nope { color: var(--red); border-color: #f6c6c1; }
@@ -174,13 +174,13 @@
               {% if c.listed_short %}<span class="pill" title="{{ c.listed_title }}">{{ icon(ICON_SCHEDULE) }}{{ c.listed_short }}</span>{% endif %}
             </div>
             <div class="tag-row">
-              <button type="button" class="tag-needs_work {{ 'active' if c.condition_tag == 'needs_work' }}" onclick="tagCard('{{ c.id }}', 'needs_work', this)">{{ icon(ICON_TOOL) }}Needs work</button>
-              <button type="button" class="tag-move_in_ready {{ 'active' if c.condition_tag == 'move_in_ready' }}" onclick="tagCard('{{ c.id }}', 'move_in_ready', this)">{{ icon(ICON_CHECK) }}Move-in ready</button>
+              <button type="button" class="tag-needs_work {{ 'active' if c.condition_tag == 'needs_work' }}" onclick="tagCard('{{ c.id }}', 'needs_work', this)" title="Needs work" aria-label="Needs work">{{ icon(ICON_TOOL) }}</button>
+              <button type="button" class="tag-move_in_ready {{ 'active' if c.condition_tag == 'move_in_ready' }}" onclick="tagCard('{{ c.id }}', 'move_in_ready', this)" title="Move-in ready" aria-label="Move-in ready">{{ icon(ICON_CHECK) }}</button>
             </div>
             <div class="apt-actions">
-              <button type="button" class="btn-nope" onclick="apartmentAction('{{ c.id }}', 'left', this)" aria-label="Not interested">{{ icon(ICON_NOPE) }}Pass</button>
-              <a href="{{ c.tracked_url }}" target="_blank" rel="noopener" aria-label="View on Funda">{{ icon(ICON_OPEN) }}Funda</a>
-              <button type="button" class="btn-like" onclick="apartmentAction('{{ c.id }}', 'right', this)" aria-label="Favorite">{{ icon(ICON_LIKE) }}Like</button>
+              <button type="button" class="btn-nope" onclick="apartmentAction('{{ c.id }}', 'left', this)" title="Not interested" aria-label="Not interested">{{ icon(ICON_NOPE) }}</button>
+              <a href="{{ c.tracked_url }}" target="_blank" rel="noopener" title="View on Funda" aria-label="View on Funda">{{ icon(ICON_OPEN) }}</a>
+              <button type="button" class="btn-like" onclick="apartmentAction('{{ c.id }}', 'right', this)" title="Favorite" aria-label="Favorite">{{ icon(ICON_LIKE) }}</button>
             </div>
           </div>
         </div>
