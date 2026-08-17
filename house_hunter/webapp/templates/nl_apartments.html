@@ -29,6 +29,7 @@
   @media (max-width: 420px) { .apt-grid { grid-template-columns: 1fr; } }
 
   .apt-card {
+    display: flex; flex-direction: column; height: 100%;
     border-radius: 14px; overflow: hidden; background: var(--gray-100);
     box-shadow: 0 1px 3px rgba(23,22,26,0.14); transition: opacity .25s ease, transform .25s ease;
   }
@@ -50,7 +51,7 @@
   .apt-card .addr { font-size: 0.62rem; color: rgba(255,255,255,0.85); text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
   .apt-card .title { font-weight: 800; font-size: 0.8rem; text-shadow: 0 1px 4px rgba(0,0,0,0.6); line-height: 1.25; }
 
-  .apt-card .body { padding: 10px; }
+  .apt-card .body { display: flex; flex-direction: column; flex: 1; padding: 10px; }
   .apt-card .price { font-size: 0.92rem; font-weight: 800; }
   .apt-card .budget-text { font-size: 0.6rem; font-weight: 700; margin-top: 1px; }
 
@@ -80,7 +81,7 @@
 
   /* All 5 controls (2 tag toggles + Pass/Funda/Like) share one row now
      that they're icon-only - same height/radius/border throughout. */
-  .apt-actions { display: flex; gap: 5px; margin-top: 8px; }
+  .apt-actions { display: flex; gap: 5px; margin-top: auto; padding-top: 8px; }
   .apt-actions button, .apt-actions a {
     margin: 0; flex: 1; height: 32px; border-radius: 9px; padding: 0; font-size: 0.62rem;
     font-weight: 700; line-height: normal; box-shadow: none; border: 1.5px solid var(--gray-200);
