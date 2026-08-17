@@ -22,6 +22,7 @@ load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
 from funda import Funda, FundaError  # noqa: E402
 
+from house_hunter.apartments import search_nl_apartments  # noqa: E402
 from house_hunter.config import load_config, save_config  # noqa: E402
 from house_hunter.email_report import (  # noqa: E402
     _contrast_text_color,
@@ -132,6 +133,31 @@ def _refresh_browse_cache() -> None:
     finally:
         _browse_status["running"] = False
         _browse_lock.release()
+
+
+# --- /apartments: same in-memory-cache-plus-background-refresh pattern as
+# /houses above, but an independent nationwide apartment search (not tied to
+# the city-scoped house_hunter config) - see house_hunter/apartments.py.
+_APARTMENTS_STALE_SECONDS = 20 * 60
+_apartments_lock = threading.Lock()
+_apartments_cache: dict = {"items": [], "updated_at": None, "error": None}
+_apartments_status: dict = {"running": False}
+
+
+def _refresh_apartments_cache() -> None:
+    if not _apartments_lock.acquire(blocking=False):
+        return
+    _apartments_status["running"] = True
+    try:
+        items = search_nl_apartments()
+        _apartments_cache["items"] = items
+        _apartments_cache["updated_at"] = datetime.now(timezone.utc)
+        _apartments_cache["error"] = None
+    except Exception as exc:  # noqa: BLE001 - keep the old cache, surface the error instead
+        _apartments_cache["error"] = str(exc)
+    finally:
+        _apartments_status["running"] = False
+        _apartments_lock.release()
 
 
 def _card_view(item) -> dict:
@@ -575,6 +601,53 @@ def houses_action(listing_id: str):
         add_rejected(listing_id)
 
     _browse_cache["items"] = [item for item in _browse_cache["items"] if item.listing.id != listing_id]
+    return jsonify({"ok": True})
+
+
+@app.route("/apartments", methods=["GET"])
+@login_required
+def apartments():
+    """Nationwide swipe deck of apartments (~100 sqm, garden, 3+ rooms,
+    within 15 min biking of any vrijeschool) - independent, experimental,
+    capped to a small number of results. Not wired into the email pipeline."""
+    stale = (
+        _apartments_cache["updated_at"] is None
+        or (datetime.now(timezone.utc) - _apartments_cache["updated_at"]).total_seconds()
+        > _APARTMENTS_STALE_SECONDS
+    )
+    if stale and not _apartments_status["running"]:
+        threading.Thread(target=_refresh_apartments_cache, daemon=True).start()
+
+    return render_template(
+        "nl_apartments.html",
+        cards=_apartments_cache["items"],
+        running=_apartments_status["running"] or _apartments_cache["updated_at"] is None,
+        updated_at=_apartments_cache["updated_at"],
+        error=_apartments_cache["error"],
+    )
+
+
+@app.route("/apartments/refresh", methods=["POST"])
+@login_required
+def apartments_refresh():
+    if not _apartments_status["running"]:
+        threading.Thread(target=_refresh_apartments_cache, daemon=True).start()
+    return redirect(url_for("apartments"))
+
+
+@app.route("/apartments/action/<listing_id>", methods=["POST"])
+@login_required
+def apartments_action(listing_id: str):
+    direction = (request.get_json(silent=True) or {}).get("direction")
+    if direction not in ("left", "right"):
+        return jsonify({"ok": False, "error": "invalid direction"}), 400
+
+    if direction == "right":
+        add_favorite(listing_id, session["user"].capitalize())
+    else:
+        add_rejected(listing_id)
+
+    _apartments_cache["items"] = [item for item in _apartments_cache["items"] if item["id"] != listing_id]
     return jsonify({"ok": True})
 
 

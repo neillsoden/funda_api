@@ -14,6 +14,7 @@ class Distance:
     km: float
     mode: str  # "driving"/"bicycling" (real travel distance) or "straight_line" (haversine fallback)
     duration_text: str | None = None
+    duration_minutes: float | None = None  # numeric, for hard cutoff filters (None on straight-line fallback)
     travel_mode: str = "driving"  # intended mode (survives straight-line fallback), for Maps links
     dest_lat: float | None = None
     dest_lng: float | None = None
@@ -134,6 +135,7 @@ def distance_to(
                     km=element["distanceMeters"] / 1000,
                     mode=mode,
                     duration_text=_format_duration(element["duration"]),
+                    duration_minutes=int(element["duration"].rstrip("s")) / 60,
                     travel_mode=mode,
                     dest_lat=dest_lat,
                     dest_lng=dest_lng,
