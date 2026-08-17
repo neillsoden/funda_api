@@ -23,10 +23,12 @@ _INTERVAL_SECONDS = {
     "weekly": 7 * 24 * 60 * 60,
 }
 
-# 4x/day. Runs here (not triggered by webapp page views) so there's exactly
-# one process ever scanning apartments - avoids two containers racing on
-# the same cursor/scanned-listing state.
-_APARTMENTS_INTERVAL_SECONDS = 6 * 60 * 60
+# Temporarily every 10 min (was 4x/day, i.e. every 6h) while actively
+# testing/tuning the criteria - turn back down once satisfied, this is
+# hitting Funda much more often. Runs here (not triggered by webapp page
+# views) so there's exactly one process ever scanning apartments - avoids
+# two containers racing on the same cursor/scanned-listing state.
+_APARTMENTS_INTERVAL_SECONDS = 10 * 60
 
 
 def _seconds_until_next_time(times: list[str], tz_name: str) -> tuple[float, str]:
