@@ -118,7 +118,7 @@ def _chip(
 
 
 _TRAVEL_ICONS = {"driving": "car", "bicycling": "bike"}
-_MAPS_TRAVEL_MODES = {"driving": "driving", "bicycling": "bicycling"}
+_MAPS_TRAVEL_MODES = {"driving": "driving", "bicycling": "bicycling", "transit": "transit"}
 
 
 def _maps_directions_url(

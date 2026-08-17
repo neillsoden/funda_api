@@ -7,6 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
 
 @dataclass
@@ -81,7 +82,7 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * radius * math.asin(math.sqrt(a))
 
 
-_TRAVEL_MODES = {"driving": "DRIVE", "bicycling": "BICYCLE"}
+_TRAVEL_MODES = {"driving": "DRIVE", "bicycling": "BICYCLE", "transit": "TRANSIT"}
 
 
 def _format_duration(seconds_str: str) -> str:
@@ -100,9 +101,12 @@ def distance_to(
     dest_lng: float,
     mode: str = "driving",
 ) -> Distance:
-    """Real travel distance/time via the Routes API (mode: "driving" or
-    "bicycling"), falling back to straight-line distance if the API isn't
-    enabled or the call fails.
+    """Real travel distance/time via the Routes API (mode: "driving",
+    "bicycling", or "transit"), falling back to straight-line distance if
+    the API isn't enabled or the call fails. "transit" is biased toward
+    train (Google has no "intercity vs sprinter" distinction - just a
+    generic train mode) and needs a near-future departure time, since
+    transit routing is schedule-based, not a fixed distance.
     """
     api_key = os.environ.get("GOOGLE_PLACES_API_KEY")
     if api_key:
@@ -116,6 +120,10 @@ def distance_to(
             ],
             "travelMode": _TRAVEL_MODES.get(mode, "DRIVE"),
         }
+        if mode == "transit":
+            body["transitPreferences"] = {"allowedTravelModes": ["TRAIN"], "routingPreference": "LESS_WALKING"}
+            departure = datetime.now(timezone.utc) + timedelta(minutes=5)
+            body["departureTime"] = departure.strftime("%Y-%m-%dT%H:%M:%SZ")
         req = urllib.request.Request(
             url,
             data=json.dumps(body).encode(),
@@ -150,3 +158,54 @@ def distance_to(
         dest_lat=dest_lat,
         dest_lng=dest_lng,
     )
+
+
+def transit_ride_minutes(
+    origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float
+) -> float | None:
+    """Time actually spent ON a train, not the door-to-door total. The
+    distanceMatrix endpoint distance_to() uses only returns one combined
+    duration (walk to station + wait + ride + walk from destination
+    station), with no way to isolate the ride itself - so this uses the
+    fuller computeRoutes endpoint instead, which breaks the trip into steps
+    per travel mode, and sums only the TRANSIT ones. Returns None if the API
+    isn't enabled, the call fails, or no transit route exists.
+    """
+    api_key = os.environ.get("GOOGLE_PLACES_API_KEY")
+    if not api_key:
+        return None
+
+    url = "https://routes.googleapis.com/directions/v2:computeRoutes"
+    departure = datetime.now(timezone.utc) + timedelta(minutes=5)
+    body = {
+        "origin": {"location": {"latLng": {"latitude": origin_lat, "longitude": origin_lng}}},
+        "destination": {"location": {"latLng": {"latitude": dest_lat, "longitude": dest_lng}}},
+        "travelMode": "TRANSIT",
+        "transitPreferences": {"allowedTravelModes": ["TRAIN"], "routingPreference": "LESS_WALKING"},
+        "departureTime": departure.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode(),
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": api_key,
+            "X-Goog-FieldMask": "routes.legs.steps.travelMode,routes.legs.steps.staticDuration",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.load(resp)
+        route = data["routes"][0]
+        transit_seconds = 0
+        for leg in route.get("legs", []):
+            for step in leg.get("steps", []):
+                if step.get("travelMode") != "TRANSIT":
+                    continue
+                raw = step.get("staticDuration")
+                if raw:
+                    transit_seconds += int(raw.rstrip("s"))
+        return transit_seconds / 60 if transit_seconds else None
+    except (urllib.error.URLError, urllib.error.HTTPError, KeyError, IndexError, ValueError):
+        return None

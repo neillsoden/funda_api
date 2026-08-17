@@ -12,7 +12,7 @@ import threading
 from contextlib import redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
@@ -22,7 +22,7 @@ load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
 from funda import Funda, FundaError  # noqa: E402
 
-from house_hunter.apartments import search_nl_apartments  # noqa: E402
+from house_hunter.apartments import scan_until_target  # noqa: E402
 from house_hunter.config import load_config, save_config  # noqa: E402
 from house_hunter.email_report import (  # noqa: E402
     _contrast_text_color,
@@ -39,12 +39,18 @@ from house_hunter.state import (  # noqa: E402
     add_favorite,
     add_rejected,
     all_favorited_listing_ids,
+    clicked_listing_ids,
+    condition_tags,
     favorited_by,
+    nl_apartment_matches,
     record_click,
     recent_run_logs,
     rejected_listing_ids,
+    remove_condition_tag,
     remove_favorite,
+    remove_nl_apartment_match,
     remove_rejected,
+    set_condition_tag,
     under_bid_listing_ids,
 )
 from house_hunter.vrijescholen import list_all_schools  # noqa: E402
@@ -135,26 +141,24 @@ def _refresh_browse_cache() -> None:
         _browse_lock.release()
 
 
-# --- /apartments: same in-memory-cache-plus-background-refresh pattern as
-# /houses above, but an independent nationwide apartment search (not tied to
-# the city-scoped house_hunter config) - see house_hunter/apartments.py.
-_APARTMENTS_STALE_SECONDS = 20 * 60
+# --- /apartments: matches persist in state.sqlite (nl_apartment_matches,
+# no cap), built up by the scheduler container on a fixed 4x/day interval
+# (house_hunter/scheduler.py) - NOT triggered by page views, so there's
+# only ever one process scanning at a time. This lock/status pair just
+# guards the manual "Scan more" button against overlapping runs.
 _apartments_lock = threading.Lock()
-_apartments_cache: dict = {"items": [], "updated_at": None, "error": None}
-_apartments_status: dict = {"running": False}
+_apartments_status: dict = {"running": False, "error": None}
 
 
-def _refresh_apartments_cache() -> None:
+def _run_apartments_scan() -> None:
     if not _apartments_lock.acquire(blocking=False):
         return
     _apartments_status["running"] = True
     try:
-        items = search_nl_apartments()
-        _apartments_cache["items"] = items
-        _apartments_cache["updated_at"] = datetime.now(timezone.utc)
-        _apartments_cache["error"] = None
-    except Exception as exc:  # noqa: BLE001 - keep the old cache, surface the error instead
-        _apartments_cache["error"] = str(exc)
+        scan_until_target()
+        _apartments_status["error"] = None
+    except Exception as exc:  # noqa: BLE001 - surface the error, keep whatever matches already persisted
+        _apartments_status["error"] = str(exc)
     finally:
         _apartments_status["running"] = False
         _apartments_lock.release()
@@ -607,23 +611,26 @@ def houses_action(listing_id: str):
 @app.route("/apartments", methods=["GET"])
 @login_required
 def apartments():
-    """Nationwide swipe deck of apartments (~100 sqm, garden, 3+ rooms,
-    within 15 min biking of any vrijeschool) - independent, experimental,
-    capped to a small number of results. Not wired into the email pipeline."""
-    stale = (
-        _apartments_cache["updated_at"] is None
-        or (datetime.now(timezone.utc) - _apartments_cache["updated_at"]).total_seconds()
-        > _APARTMENTS_STALE_SECONDS
-    )
-    if stale and not _apartments_status["running"]:
-        threading.Thread(target=_refresh_apartments_cache, daemon=True).start()
+    """Nationwide grid of apartments (~100 sqm, garden, 3+ bedrooms, within 15
+    min biking of any vrijeschool) - independent, experimental. Matches
+    build up over time via the scheduler's 4x/day scan (see
+    house_hunter/apartments.py and scheduler.py); this route only reads
+    what's already found, it doesn't trigger scanning itself. Not wired
+    into the email pipeline."""
+    cards = nl_apartment_matches()
+    card_ids = [card["id"] for card in cards]
+    tags = condition_tags(card_ids)
+    viewed_ids = clicked_listing_ids(card_ids)
+    for card in cards:
+        card["condition_tag"] = tags.get(card["id"])
+        card["viewed"] = card["id"] in viewed_ids
+        card["tracked_url"] = f"/click/{card['id']}?to={quote(card['url'], safe='')}"
 
     return render_template(
         "nl_apartments.html",
-        cards=_apartments_cache["items"],
-        running=_apartments_status["running"] or _apartments_cache["updated_at"] is None,
-        updated_at=_apartments_cache["updated_at"],
-        error=_apartments_cache["error"],
+        cards=cards,
+        running=_apartments_status["running"],
+        error=_apartments_status["error"],
     )
 
 
@@ -631,7 +638,7 @@ def apartments():
 @login_required
 def apartments_refresh():
     if not _apartments_status["running"]:
-        threading.Thread(target=_refresh_apartments_cache, daemon=True).start()
+        threading.Thread(target=_run_apartments_scan, daemon=True).start()
     return redirect(url_for("apartments"))
 
 
@@ -647,8 +654,27 @@ def apartments_action(listing_id: str):
     else:
         add_rejected(listing_id)
 
-    _apartments_cache["items"] = [item for item in _apartments_cache["items"] if item["id"] != listing_id]
+    remove_nl_apartment_match(listing_id)
+    remove_condition_tag(listing_id)
     return jsonify({"ok": True})
+
+
+@app.route("/apartments/tag/<listing_id>", methods=["POST"])
+@login_required
+def apartments_tag(listing_id: str):
+    """Manual "how much work does this need" tag - toggles off if the same
+    tag is clicked again, otherwise sets/overwrites it."""
+    tag = (request.get_json(silent=True) or {}).get("tag")
+    if tag not in ("needs_work", "move_in_ready"):
+        return jsonify({"ok": False, "error": "invalid tag"}), 400
+
+    current = condition_tags([listing_id]).get(listing_id)
+    if current == tag:
+        remove_condition_tag(listing_id)
+        return jsonify({"ok": True, "tag": None})
+
+    set_condition_tag(listing_id, tag)
+    return jsonify({"ok": True, "tag": tag})
 
 
 if __name__ == "__main__":

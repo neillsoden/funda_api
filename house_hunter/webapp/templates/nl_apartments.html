@@ -2,211 +2,241 @@
 {% block title %}NL Apartments — House Hunter{% endblock %}
 {% block head %}
 <style>
-  .wrap { max-width: 400px; }
+  .wrap { max-width: 1080px; }
   h1 { display: none; }
   .refresh-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   .refresh-row .status { font-size: 0.68rem; color: var(--gray-500); }
   .refresh-row button { margin: 0; height: 26px; padding: 0 10px; font-size: 0.66rem; line-height: normal;
     box-shadow: none; display: inline-flex; align-items: center; justify-content: center; }
 
-  .deck { position: relative; height: 66vh; min-height: 420px; max-height: 560px; }
-  .empty-state { text-align: center; color: var(--gray-500); padding: 40px 20px; font-size: 0.8rem;
-    display: flex; align-items: center; justify-content: center; height: 100%; }
+  .apt-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  @media (max-width: 900px) { .apt-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 680px) { .apt-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
+  @media (max-width: 420px) { .apt-grid { grid-template-columns: 1fr; } }
 
-  .swipe-card {
-    position: absolute; inset: 0; border-radius: 18px; overflow: hidden;
-    box-shadow: 0 1px 3px rgba(23,22,26,0.14);
-    touch-action: none; user-select: none; background: var(--gray-100);
+  .apt-card {
+    border-radius: 14px; overflow: hidden; background: var(--gray-100);
+    box-shadow: 0 1px 3px rgba(23,22,26,0.14); transition: opacity .25s ease, transform .25s ease;
   }
-  .swipe-card img.photo {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block;
+  .apt-card .photo-wrap { position: relative; height: 150px; }
+  .apt-card img.photo { width: 100%; height: 150px; object-fit: cover; display: block; }
+  .apt-card .scrim {
+    position: absolute; left: 0; right: 0; top: 0; height: 100%;
+    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 55%);
   }
-  .swipe-card .scrim {
-    position: absolute; left: 0; right: 0; bottom: 0; height: 62%;
-    background: linear-gradient(to top, rgba(0,0,0,0.86) 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0) 100%);
-  }
-  .swipe-card .badge-fav { position: absolute; top: 12px; right: 12px; background: #fbbc04; color: #202124;
-    font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 6px; }
-  .swipe-card .stamp { position: absolute; top: 30px; font-size: 1.1rem; font-weight: 800; letter-spacing: 0.05em;
-    padding: 5px 12px; border-radius: 8px; border: 3px solid; opacity: 0; pointer-events: none; z-index: 2; }
-  .swipe-card .stamp.like { left: 16px; color: #34d17e; border-color: #34d17e; transform: rotate(-18deg); }
-  .swipe-card .stamp.nope { right: 16px; color: #ff5c4d; border-color: #ff5c4d; transform: rotate(18deg); }
+  .apt-card .badge-fav { position: absolute; top: 8px; right: 8px; background: #fbbc04; color: #202124;
+    font-size: 9px; font-weight: 800; padding: 3px 7px; border-radius: 5px; }
+  .apt-card .badge-new { position: absolute; top: 8px; left: 8px; background: #1967d2; color: #fff;
+    font-size: 9px; font-weight: 800; letter-spacing: 0.02em; padding: 3px 7px; border-radius: 5px; }
+  .apt-card .badge-viewed { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.55);
+    color: #fff; font-size: 9px; font-weight: 700; padding: 3px 7px; border-radius: 5px;
+    display: flex; align-items: center; gap: 3px; }
+  .apt-card .badge-viewed svg { width: 10px; height: 10px; }
+  .apt-card .photo-text { position: absolute; left: 10px; right: 10px; bottom: 8px; color: #fff; }
+  .apt-card .addr { font-size: 0.62rem; color: rgba(255,255,255,0.85); text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+  .apt-card .title { font-weight: 800; font-size: 0.8rem; text-shadow: 0 1px 4px rgba(0,0,0,0.6); line-height: 1.25; }
 
-  .swipe-card .overlay { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 16px 16px 16px; color: #fff; }
-  .swipe-card .addr { font-size: 0.68rem; color: rgba(255,255,255,0.75); margin-bottom: 2px; }
-  .swipe-card .title { font-weight: 800; font-size: 1rem; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
-  .swipe-card .price-row { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 8px 0; }
-  .swipe-card .price { font-size: 1.3rem; font-weight: 800; }
+  .apt-card .body { padding: 8px 10px 10px 10px; }
+  .apt-card .price { font-size: 0.92rem; font-weight: 800; }
+  .apt-card .budget-text { font-size: 0.6rem; font-weight: 700; margin-top: 1px; }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 6px; }
+  .pill { display: inline-flex; align-items: center; gap: 3px; background: var(--gray-100); color: var(--gray-600);
+    font-size: 0.6rem; font-weight: 700; padding: 3px 7px; border-radius: 8px; text-decoration: none; }
+  .pill svg { width: 10px; height: 10px; flex-shrink: 0; }
+  .pill.ok { background: #e6f4ea; color: #146c2e; }
+  .energy-dot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+    border-radius: 50%; font-size: 0.56rem; font-weight: 800; }
 
-  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .pill { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.18);
-    backdrop-filter: blur(4px); color: #fff; font-size: 0.68rem; font-weight: 700; padding: 5px 9px; border-radius: 999px; }
-  .pill svg { width: 12px; height: 12px; flex-shrink: 0; }
-  .pill.ok { background: rgba(52,209,126,0.3); }
-  .energy-dot { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
-    border-radius: 50%; font-size: 0.62rem; font-weight: 800; box-shadow: 0 0 0 2px rgba(255,255,255,0.4); }
-  .funda-pill { margin-left: auto; text-decoration: none; }
+  .apt-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .apt-actions button { margin: 0; flex: 1; height: 30px; border-radius: 8px; padding: 0; font-size: 0;
+    line-height: normal; box-shadow: none; display: flex; align-items: center; justify-content: center; }
+  .apt-actions .btn-nope { background: var(--red-tint); border: none; }
+  .apt-actions .btn-nope svg { fill: var(--red); }
+  .apt-actions .btn-like { background: #e6f4ea; border: none; }
+  .apt-actions .btn-like svg { fill: #1e8e3e; }
+  .apt-actions button svg { pointer-events: none; width: 16px; height: 16px; display: block; }
+  .apt-actions .funda-link { flex: 1; display: flex; align-items: center; justify-content: center;
+    height: 30px; border-radius: 8px; background: var(--gray-100); text-decoration: none; }
+  .apt-actions .funda-link svg { width: 16px; height: 16px; fill: var(--gray-600); }
 
-  .controls { display: flex; justify-content: center; gap: 20px; margin-top: 14px; }
-  .controls button { margin: 0; width: 48px; height: 48px; border-radius: 50%; padding: 0; font-size: 0;
-    line-height: normal; box-shadow: 0 2px 8px rgba(23,22,26,0.12);
-    display: flex; align-items: center; justify-content: center; }
-  .controls .btn-nope { background: #fff; border: none; }
-  .controls .btn-nope svg { fill: var(--red); }
-  .controls .btn-like { background: #fff; border: none; }
-  .controls .btn-like svg { fill: #1e8e3e; }
-  .controls button svg { pointer-events: none; width: 20px; height: 20px; display: block; }
-  @media (max-width: 480px) {
-    .wrap { padding-top: 12px; padding-bottom: 10px; }
-    .refresh-row { margin-bottom: 6px; }
-    .deck { height: calc(100dvh - 170px); min-height: 320px; max-height: 520px; }
-    .controls { margin-top: 10px; }
-  }
+  .filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .filter-row button { margin: 0; height: 26px; padding: 0 12px; font-size: 0.68rem; font-weight: 700;
+    line-height: normal; box-shadow: none; border-radius: 999px; border: 1.5px solid var(--gray-200);
+    background: #fff; color: var(--gray-600); cursor: pointer; display: inline-flex; align-items: center; }
+  .filter-row button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .filter-row.last { margin-bottom: 12px; }
+
+  .apt-card.filtered-out { display: none; }
+  .tag-row { display: flex; gap: 6px; margin-top: 6px; }
+  .tag-row button { margin: 0; flex: 1; height: 26px; border-radius: 7px; padding: 0 4px; font-size: 0.6rem;
+    font-weight: 700; line-height: normal; box-shadow: none; border: 1.5px solid var(--gray-200);
+    background: #fff; color: var(--gray-600); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; }
+  .tag-row button svg { width: 11px; height: 11px; flex-shrink: 0; }
+  .tag-row button.tag-needs_work.active { background: #fce8e6; color: #c5221f; border-color: #f6c6c1; }
+  .tag-row button.tag-move_in_ready.active { background: #e6f4ea; color: #146c2e; border-color: #b7dfc0; }
+
+  .empty-state { text-align: center; color: var(--gray-500); padding: 40px 20px; font-size: 0.8rem; }
 </style>
 {% if running %}<meta http-equiv="refresh" content="6">{% endif %}
 {% endblock %}
 {% block content %}
-  {% macro icon(path, size=11) %}<svg viewBox="0 0 24 24" width="{{ size }}" height="{{ size }}" fill="currentColor"><path d="{{ path }}"/></svg>{% endmacro %}
+  {% macro icon(path, size=10) %}<svg viewBox="0 0 24 24" width="{{ size }}" height="{{ size }}" fill="currentColor"><path d="{{ path }}"/></svg>{% endmacro %}
   {% set ICON_ROOMS = "M3 3h18v18H3V3zm2 2v14h14V5H5zm2 2h4v4H7V7zm6 0h4v4h-4V7zM7 13h4v4H7v-4zm6 0h4v4h-4v-4z" %}
   {% set ICON_AREA = "M9 3v2H5v4H3V3h6zm12 0v6h-2V5h-4V3h6zM3 15v6h6v-2H5v-4H3zm18 0h-2v4h-4v2h6v-6z" %}
   {% set ICON_GARDEN = "M12 2C8 6 5 9.5 5 13a7 7 0 0 0 14 0c0-3.5-3-7-7-11zm0 17a5 5 0 0 1-5-5c0-.34.03-.67.09-1H11v6h1v-6h3.91c.06.33.09.66.09 1a5 5 0 0 1-5 5z" %}
   {% set ICON_BIKE = "M15.5 5.5c1.11 0 2-.89 2-2s-.89-2-2-2-2 .89-2 2 .89 2 2 2zM5 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.93 0-3.5-1.57-3.5-3.5S3.07 13.5 5 13.5s3.5 1.57 3.5 3.5S6.93 20.5 5 20.5zm5.8-10l2.4-2.4.8.8c1.3 1.3 3 2.1 5.1 2.1V9c-1.5 0-2.7-.6-3.6-1.5l-1.9-1.9c-.5-.4-1-.6-1.6-.6s-1.1.2-1.4.6L7.8 8.4c-.4.4-.6.9-.6 1.4 0 .6.2 1.1.6 1.4L11 14v5h2v-6.2l-2.2-2.3zM19 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z" %}
   {% set ICON_OPEN = "M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zm-9 2c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-7h-2v7H5V7h7V5H5z" %}
+  {% set ICON_TRAIN = "M12 2c-4 0-8 .5-8 4v9.5A3.5 3.5 0 0 0 7.5 19L6 20.5V21h12v-.5L16.5 19A3.5 3.5 0 0 0 20 15.5V6c0-3.5-4-4-8-4zM7.5 17A1.5 1.5 0 1 1 9 15.5 1.5 1.5 0 0 1 7.5 17zm9 0a1.5 1.5 0 1 1 1.5-1.5 1.5 1.5 0 0 1-1.5 1.5zM18 10H6V6h12z" %}
+  {% set ICON_NOPE = "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" %}
+  {% set ICON_LIKE = "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" %}
+  {% set ICON_TOOL = "M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z" %}
+  {% set ICON_SCHEDULE = "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" %}
+  {% set ICON_CHECK = "M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" %}
 
   <div class="refresh-row">
     <span class="status">
-      {% if running %}Building the deck…{% elif updated_at %}Updated {{ updated_at.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}Not built yet{% endif %}
+      {{ cards|length }} found so far{% if running %} · scanning now (paced, to go easy on Funda)…{% endif %}
     </span>
     <form method="post" action="{{ url_for('apartments_refresh') }}">
-      <button type="submit" class="btn-secondary" {% if running %}disabled{% endif %}>Refresh</button>
+      <button type="submit" class="btn-secondary" {% if running %}disabled{% endif %}>{{ 'Scanning…' if running else 'Scan more now' }}</button>
     </form>
   </div>
 
-  <p class="hint" style="margin:0 0 10px 0;">~100 m² · garden · 3+ rooms · within 15 min biking of any vrijeschool. Experimental — capped to a small number of results.</p>
+  <p class="hint" style="margin:0 0 12px 0;">Mortgage budget by energy label · ~100 m² · garden · 3+ bedrooms · within 15 min biking of any vrijeschool · train ride itself under 1h20 to Utrecht Centraal (not counting getting to the station). Experimental - scans automatically 4x a day, no cap on how many accumulate; use "Scan more now" to check sooner.</p>
 
   {% if error %}<div class="errors">{{ error }}</div>{% endif %}
 
   {% if not cards %}
-    <div class="card"><p class="hint" style="margin:0;">{% if running %}Building the deck for the first time — a nationwide search takes a minute or two.{% else %}No matches found yet.{% endif %}</p></div>
+    <div class="card"><p class="hint" style="margin:0;">No matches found yet — the scheduler checks 4 times a day, or hit "Scan more now" above.</p></div>
   {% else %}
-    <div class="deck" id="deck-0">
-      <div class="empty-state" style="display:none;">No more apartments right now.</div>
+    <div class="filter-row" id="filter-row-tag">
+      <button type="button" class="active" data-filter="all" onclick="setTagFilter('all')">All</button>
+      <button type="button" data-filter="needs_work" onclick="setTagFilter('needs_work')">Needs work</button>
+      <button type="button" data-filter="move_in_ready" onclick="setTagFilter('move_in_ready')">Move-in ready</button>
+      <button type="button" data-filter="untagged" onclick="setTagFilter('untagged')">Untagged</button>
+    </div>
+    <div class="filter-row last" id="filter-row-viewed">
+      <button type="button" class="active" data-filter="all" onclick="setViewedFilter('all')">All</button>
+      <button type="button" data-filter="viewed" onclick="setViewedFilter('viewed')">Viewed</button>
+      <button type="button" data-filter="not_viewed" onclick="setViewedFilter('not_viewed')">Not viewed</button>
+    </div>
+    <div class="apt-grid" id="apt-grid">
       {% for c in cards %}
-        <div class="swipe-card" data-id="{{ c.id }}" style="z-index:{{ cards|length - loop.index0 }};">
-          <img class="photo" src="{{ c.photo }}" draggable="false">
-          <div class="scrim"></div>
-          {% if c.favorited_by %}<div class="badge-fav">&#9733; {{ c.favorited_by|join(', ') }}</div>{% endif %}
-          <div class="stamp like">LIKE</div>
-          <div class="stamp nope">NOPE</div>
-          <div class="overlay">
-            <div class="addr">{{ c.neighbourhood + ', ' if c.neighbourhood }}{{ c.city }}</div>
-            <div class="title">{{ c.title }}</div>
-            <div class="price-row"><span class="price">{{ c.price }}</span></div>
+        <div class="apt-card" data-id="{{ c.id }}" data-tag="{{ c.condition_tag or '' }}" data-viewed="{{ '1' if c.viewed else '0' }}">
+          <div class="photo-wrap">
+            <img class="photo" src="{{ c.photo }}">
+            <div class="scrim"></div>
+            {% if c.new_badge %}<div class="badge-new">{{ c.new_badge }}</div>{% endif %}
+            {% if c.favorited_by %}<div class="badge-fav">&#9733; {{ c.favorited_by|join(', ') }}</div>{% endif %}
+            {% if c.viewed %}<div class="badge-viewed">{{ icon(ICON_CHECK, 10) }}Viewed</div>{% endif %}
+            <div class="photo-text">
+              <div class="addr">{{ c.neighbourhood + ', ' if c.neighbourhood }}{{ c.city }}</div>
+              <div class="title">{{ c.title }}</div>
+            </div>
+          </div>
+          <div class="body">
+            <div class="price" style="color:{{ c.price_color or 'var(--ink)' }};">{{ c.price }}</div>
+            {% if c.budget_total_text %}<div class="budget-text" style="color:{{ c.price_color }};">of {{ c.budget_total_text }} budget</div>{% endif %}
             <div class="pill-row">
-              <span class="pill" title="{{ c.rooms_total }} rooms">{{ icon(ICON_ROOMS) }}{{ c.rooms_total }}</span>
+              <span class="pill" title="{{ c.bedrooms }} bedrooms">{{ icon(ICON_ROOMS) }}{{ c.bedrooms }}</span>
               {% if c.living_area %}<span class="pill" title="{{ c.living_area }} m² living">{{ icon(ICON_AREA) }}{{ c.living_area }} m²</span>{% endif %}
               <span class="pill ok" title="Has a garden">{{ icon(ICON_GARDEN) }}Garden</span>
-              <span class="pill ok" title="{{ c.school_km }} km to {{ c.school_name }}">{{ icon(ICON_BIKE) }}{{ c.school_minutes }} min</span>
+              {% for s in c.schools %}
+                {% if s.maps_url %}<a class="pill ok" href="{{ s.maps_url }}" target="_blank" rel="noopener" title="{{ s.km }} km to {{ s.name }} - view route">{{ icon(ICON_BIKE) }}{{ s.minutes }} min · {{ s.name }}</a>
+                {% else %}<span class="pill ok" title="{{ s.km }} km to {{ s.name }}">{{ icon(ICON_BIKE) }}{{ s.minutes }} min · {{ s.name }}</span>{% endif %}
+              {% endfor %}
+              {% if c.utrecht_minutes is not none %}
+                {% if c.utrecht_maps_url %}<a class="pill ok" href="{{ c.utrecht_maps_url }}" target="_blank" rel="noopener" title="{{ c.utrecht_minutes }} min train ride to Utrecht Centraal (not counting getting to the station) - view route">{{ icon(ICON_TRAIN) }}{{ c.utrecht_minutes }} min UT</a>
+                {% else %}<span class="pill ok" title="{{ c.utrecht_minutes }} min train ride to Utrecht Centraal (not counting getting to the station)">{{ icon(ICON_TRAIN) }}{{ c.utrecht_minutes }} min UT</span>{% endif %}
+              {% endif %}
               <span class="energy-dot" style="background:{{ c.energy_bg }};color:{{ c.energy_text }};" title="Energy label {{ c.energy_label }}">{{ c.energy_label }}</span>
-              <a class="pill funda-pill" href="{{ c.url }}" target="_blank" rel="noopener">{{ icon(ICON_OPEN) }} Funda</a>
+              {% if c.listed_short %}<span class="pill" title="{{ c.listed_title }}">{{ icon(ICON_SCHEDULE) }}{{ c.listed_short }}</span>{% endif %}
+            </div>
+            <div class="tag-row">
+              <button type="button" class="tag-needs_work {{ 'active' if c.condition_tag == 'needs_work' }}" onclick="tagCard('{{ c.id }}', 'needs_work', this)">{{ icon(ICON_TOOL) }}Needs work</button>
+              <button type="button" class="tag-move_in_ready {{ 'active' if c.condition_tag == 'move_in_ready' }}" onclick="tagCard('{{ c.id }}', 'move_in_ready', this)">{{ icon(ICON_CHECK) }}Move-in ready</button>
+            </div>
+            <div class="apt-actions">
+              <button type="button" class="btn-nope" onclick="apartmentAction('{{ c.id }}', 'left', this)" aria-label="Not interested">{{ icon(ICON_NOPE, 16) }}</button>
+              <a class="funda-link" href="{{ c.tracked_url }}" target="_blank" rel="noopener" aria-label="View on Funda">{{ icon(ICON_OPEN, 16) }}</a>
+              <button type="button" class="btn-like" onclick="apartmentAction('{{ c.id }}', 'right', this)" aria-label="Favorite">{{ icon(ICON_LIKE, 16) }}</button>
             </div>
           </div>
         </div>
       {% endfor %}
     </div>
-    <div class="controls">
-      <button type="button" class="btn-nope" onclick="programmaticSwipe(0, 'left')" aria-label="Not interested">
-        <svg width="20" height="20" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-      </button>
-      <button type="button" class="btn-like" onclick="programmaticSwipe(0, 'right')" aria-label="Favorite">
-        <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-      </button>
-    </div>
   {% endif %}
 
   <script>
-    function apartmentAction(listingId, direction) {
-      return fetch(`/apartments/action/${listingId}`, {
+    function apartmentAction(listingId, direction, button) {
+      fetch(`/apartments/action/${listingId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ direction }),
       });
-    }
-
-    function topCard(deckIndex) {
-      const deck = document.getElementById(`deck-${deckIndex}`);
-      const cards = deck.querySelectorAll('.swipe-card');
-      return cards.length ? cards[0] : null;
-    }
-
-    function afterCardRemoved(deckIndex) {
-      const deck = document.getElementById(`deck-${deckIndex}`);
-      const emptyState = deck.querySelector('.empty-state');
-      const remaining = deck.querySelectorAll('.swipe-card');
-      if (!remaining.length) emptyState.style.display = 'flex';
-    }
-
-    function flingCard(card, deckIndex, direction) {
-      const dx = direction === 'right' ? 600 : -600;
-      card.style.transition = 'transform .35s ease, opacity .35s ease';
-      card.style.transform = `translate(${dx}px, -40px) rotate(${direction === 'right' ? 30 : -30}deg)`;
+      const card = button.closest('.apt-card');
       card.style.opacity = '0';
-      const listingId = card.dataset.id;
-      apartmentAction(listingId, direction);
+      card.style.transform = 'scale(0.92)';
       setTimeout(() => {
         card.remove();
-        afterCardRemoved(deckIndex);
-      }, 350);
-    }
-
-    function programmaticSwipe(deckIndex, direction) {
-      const card = topCard(deckIndex);
-      if (!card) return;
-      flingCard(card, deckIndex, direction);
-    }
-
-    function initDrag(card, deckIndex) {
-      let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false;
-      const likeStamp = card.querySelector('.stamp.like');
-      const nopeStamp = card.querySelector('.stamp.nope');
-
-      function onDown(e) {
-        if (card.parentElement.querySelectorAll('.swipe-card')[0] !== card) return;
-        dragging = true;
-        startX = e.clientX; startY = e.clientY;
-        card.style.transition = 'none';
-        card.setPointerCapture(e.pointerId);
-      }
-      function onMove(e) {
-        if (!dragging) return;
-        dx = e.clientX - startX; dy = e.clientY - startY;
-        card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 16}deg)`;
-        likeStamp.style.opacity = Math.min(Math.max(dx / 100, 0), 1);
-        nopeStamp.style.opacity = Math.min(Math.max(-dx / 100, 0), 1);
-      }
-      function onUp() {
-        if (!dragging) return;
-        dragging = false;
-        const threshold = 110;
-        if (dx > threshold) {
-          flingCard(card, deckIndex, 'right');
-        } else if (dx < -threshold) {
-          flingCard(card, deckIndex, 'left');
-        } else {
-          card.style.transition = 'transform .25s ease';
-          card.style.transform = 'translate(0,0) rotate(0)';
-          likeStamp.style.opacity = 0;
-          nopeStamp.style.opacity = 0;
+        const grid = document.getElementById('apt-grid');
+        if (grid && !grid.querySelector('.apt-card')) {
+          grid.outerHTML = '<div class="empty-state">No more apartments right now.</div>';
         }
-        dx = 0; dy = 0;
-      }
-
-      card.addEventListener('pointerdown', onDown);
-      card.addEventListener('pointermove', onMove);
-      card.addEventListener('pointerup', onUp);
-      card.addEventListener('pointercancel', onUp);
+      }, 250);
     }
 
-    document.querySelectorAll('.swipe-card').forEach((card) => initDrag(card, 0));
+    function tagCard(listingId, tag, button) {
+      fetch(`/apartments/tag/${listingId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data.ok) return;
+          const card = button.closest('.apt-card');
+          card.querySelectorAll('.tag-row button').forEach((btn) => btn.classList.remove('active'));
+          if (data.tag) {
+            button.classList.add('active');
+            card.dataset.tag = data.tag;
+          } else {
+            card.dataset.tag = '';
+          }
+          applyFilter();
+        });
+    }
+
+    let tagFilter = 'all';
+    let viewedFilter = 'all';
+    function setTagFilter(filter) {
+      tagFilter = filter;
+      document.querySelectorAll('#filter-row-tag button').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+      });
+      applyFilter();
+    }
+    function setViewedFilter(filter) {
+      viewedFilter = filter;
+      document.querySelectorAll('#filter-row-viewed button').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+      });
+      applyFilter();
+    }
+    function applyFilter() {
+      document.querySelectorAll('.apt-card').forEach((card) => {
+        const tag = card.dataset.tag || '';
+        const tagOk =
+          tagFilter === 'all' ||
+          (tagFilter === 'untagged' && !tag) ||
+          tagFilter === tag;
+        const viewed = card.dataset.viewed === '1';
+        const viewedOk =
+          viewedFilter === 'all' ||
+          (viewedFilter === 'viewed' && viewed) ||
+          (viewedFilter === 'not_viewed' && !viewed);
+        card.classList.toggle('filtered-out', !(tagOk && viewedOk));
+      });
+    }
   </script>
 {% endblock %}

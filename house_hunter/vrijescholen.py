@@ -165,6 +165,25 @@ def nearest_vrijeschool(lat: float, lng: float) -> dict | None:
     return {"id": school_id, "title": title, "city": city, "lat": school_lat, "lng": school_lng}
 
 
+def schools_in_city(city: str) -> list[dict]:
+    """All cached vrijescholen in a given city (case-insensitive exact match)
+    - a city can have more than one (e.g. multiple Steiner schools in
+    Amsterdam), unlike nearest_vrijeschool() which only ever returns one.
+    """
+    if not city:
+        return []
+    refresh_schools()  # no-op unless the cached directory is >30 days old
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, title, city, lat, lng FROM vrijescholen WHERE lower(city) = lower(?)",
+            (city,),
+        ).fetchall()
+    return [
+        {"id": row[0], "title": row[1], "city": row[2], "lat": row[3], "lng": row[4]}
+        for row in rows
+    ]
+
+
 def list_all_schools() -> list[dict]:
     """Every cached vrijeschool, sorted by city then name, for a browsable
     directory page - not tied to any particular listing.

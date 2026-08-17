@@ -3,6 +3,7 @@ genuinely new listing apart from one we've already emailed, and detect when
 an already-seen listing's asking price has since dropped.
 """
 
+import json
 import sqlite3
 from contextlib import contextmanager
 
@@ -98,6 +99,41 @@ def _connect():
                 matched_count INTEGER,
                 sent_count INTEGER,
                 detail TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS nl_apartment_matches (
+                listing_id TEXT PRIMARY KEY,
+                data_json TEXT NOT NULL,
+                found_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS nl_apartments_scanned (
+                listing_id TEXT PRIMARY KEY,
+                scanned_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS nl_apartments_scan_cursor (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                next_page INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS condition_tags (
+                listing_id TEXT PRIMARY KEY,
+                tag TEXT NOT NULL,
+                tagged_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
             """
         )
@@ -337,3 +373,119 @@ def recent_run_logs() -> list[dict]:
             }
             for row in rows
         ]
+
+
+def save_nl_apartment_match(listing_id: str, data: dict) -> None:
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO nl_apartment_matches (listing_id, data_json, found_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(listing_id) DO UPDATE SET data_json = excluded.data_json
+            """,
+            (listing_id, json.dumps(data)),
+        )
+
+
+def remove_nl_apartment_match(listing_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM nl_apartment_matches WHERE listing_id = ?", (listing_id,))
+
+
+def nl_apartment_matches() -> list[dict]:
+    """Persisted apartment matches, most recently found first."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT data_json FROM nl_apartment_matches ORDER BY found_at DESC"
+        ).fetchall()
+        return [json.loads(row[0]) for row in rows]
+
+
+def nl_apartment_match_count() -> int:
+    with _connect() as conn:
+        return conn.execute("SELECT COUNT(*) FROM nl_apartment_matches").fetchone()[0]
+
+
+def nl_apartments_scanned_ids(listing_ids: list[str]) -> set[str]:
+    """Which of these candidate IDs have already been detail-fetched and
+    evaluated before (match or not) - so a scan pass never re-fetches the
+    same listing twice."""
+    if not listing_ids:
+        return set()
+    with _connect() as conn:
+        placeholders = ",".join("?" for _ in listing_ids)
+        rows = conn.execute(
+            f"SELECT listing_id FROM nl_apartments_scanned WHERE listing_id IN ({placeholders})",
+            listing_ids,
+        )
+        return {row[0] for row in rows}
+
+
+def mark_nl_apartments_scanned(listing_ids: list[str]) -> None:
+    if not listing_ids:
+        return
+    with _connect() as conn:
+        conn.executemany(
+            "INSERT OR IGNORE INTO nl_apartments_scanned (listing_id, scanned_at) VALUES (?, datetime('now'))",
+            [(listing_id,) for listing_id in listing_ids],
+        )
+
+
+def get_nl_apartments_scan_cursor() -> int:
+    """Which search-results page to resume nationwide scanning from, so
+    incremental batches make forward progress instead of re-walking pages
+    already scanned on every pass."""
+    with _connect() as conn:
+        row = conn.execute("SELECT next_page FROM nl_apartments_scan_cursor WHERE id = 1").fetchone()
+        return row[0] if row else 0
+
+
+def set_nl_apartments_scan_cursor(next_page: int) -> None:
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO nl_apartments_scan_cursor (id, next_page, updated_at)
+            VALUES (1, ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE SET next_page = excluded.next_page, updated_at = datetime('now')
+            """,
+            (next_page,),
+        )
+
+
+# Manual "how much work does this place need" tag - user-applied while
+# browsing, not auto-detected (Funda's data isn't reliable enough for that -
+# see project notes). Generic (listing_id-keyed, no source table), usable on
+# any listing type.
+CONDITION_TAGS = ("needs_work", "move_in_ready")
+
+
+def set_condition_tag(listing_id: str, tag: str) -> None:
+    if tag not in CONDITION_TAGS:
+        raise ValueError(f"Unknown condition tag: {tag!r}")
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO condition_tags (listing_id, tag, tagged_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(listing_id) DO UPDATE SET tag = excluded.tag, tagged_at = datetime('now')
+            """,
+            (listing_id, tag),
+        )
+
+
+def remove_condition_tag(listing_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM condition_tags WHERE listing_id = ?", (listing_id,))
+
+
+def condition_tags(listing_ids: list[str]) -> dict[str, str]:
+    """{listing_id: tag} for whichever of these listing_ids have been tagged."""
+    if not listing_ids:
+        return {}
+    with _connect() as conn:
+        placeholders = ",".join("?" for _ in listing_ids)
+        rows = conn.execute(
+            f"SELECT listing_id, tag FROM condition_tags WHERE listing_id IN ({placeholders})",
+            listing_ids,
+        )
+        return dict(rows)
