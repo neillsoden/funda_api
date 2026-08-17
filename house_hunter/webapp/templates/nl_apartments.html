@@ -4,10 +4,23 @@
 <style>
   .wrap { max-width: 1080px; }
   h1 { display: none; }
-  .refresh-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .refresh-row .status { font-size: 0.68rem; color: var(--gray-500); }
-  .refresh-row button { margin: 0; height: 26px; padding: 0 10px; font-size: 0.66rem; line-height: normal;
-    box-shadow: none; display: inline-flex; align-items: center; justify-content: center; }
+
+  .header-card, .filters-card {
+    background: #fff; border: 1px solid var(--gray-200); border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(23,22,26,0.03);
+  }
+  .header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .page-title { font-weight: 800; font-size: 1.05rem; color: var(--ink); letter-spacing: -0.01em; }
+  .header-top .status { font-size: 0.7rem; color: var(--gray-500); margin-top: 3px; }
+  .header-top button { margin: 0; height: 30px; padding: 0 14px; font-size: 0.7rem; line-height: normal;
+    box-shadow: none; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .criteria { font-size: 0.66rem; color: var(--gray-500); line-height: 1.6; margin: 10px 0 0 0;
+    padding-top: 10px; border-top: 1px solid var(--gray-100); }
+
+  .filters-card { display: flex; flex-direction: column; gap: 8px; }
+  .filter-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .filter-label { font-size: 0.64rem; font-weight: 800; color: var(--gray-500); text-transform: uppercase;
+    letter-spacing: 0.04em; min-width: 58px; flex-shrink: 0; }
 
   .apt-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
   @media (max-width: 900px) { .apt-grid { grid-template-columns: repeat(3, 1fr); } }
@@ -64,29 +77,28 @@
   .pill svg { width: 10px; height: 10px; flex-shrink: 0; }
   .pill.ok { background: #e6f4ea; color: #146c2e; }
 
-  /* Tag row and action row share the same height/radius/border so they
-     read as one matched control group, not two different UIs stacked. */
-  .tag-row, .apt-actions { display: flex; gap: 6px; margin-top: 8px; }
-  .tag-row button, .apt-actions button, .apt-actions a {
-    margin: 0; flex: 1; height: 32px; border-radius: 9px; padding: 0 4px; font-size: 0.62rem;
+  /* All 5 controls (2 tag toggles + Pass/Funda/Like) share one row now
+     that they're icon-only - same height/radius/border throughout. */
+  .apt-actions { display: flex; gap: 5px; margin-top: 8px; }
+  .apt-actions button, .apt-actions a {
+    margin: 0; flex: 1; height: 32px; border-radius: 9px; padding: 0; font-size: 0.62rem;
     font-weight: 700; line-height: normal; box-shadow: none; border: 1.5px solid var(--gray-200);
     background: #fff; color: var(--gray-600); cursor: pointer; text-decoration: none;
-    display: flex; align-items: center; justify-content: center; gap: 4px;
+    display: flex; align-items: center; justify-content: center;
   }
-  .tag-row button svg, .apt-actions button svg, .apt-actions a svg { width: 16px; height: 16px; flex-shrink: 0; pointer-events: none; }
-  .tag-row button.tag-needs_work.active { background: #fce8e6; color: #c5221f; border-color: #f6c6c1; }
-  .tag-row button.tag-move_in_ready.active { background: #e6f4ea; color: #146c2e; border-color: #b7dfc0; }
+  .apt-actions svg { width: 16px; height: 16px; flex-shrink: 0; pointer-events: none; }
+  .apt-actions .tag-needs_work.active { background: #fce8e6; color: #c5221f; border-color: #f6c6c1; }
+  .apt-actions .tag-move_in_ready.active { background: #e6f4ea; color: #146c2e; border-color: #b7dfc0; }
   .apt-actions .btn-nope { color: var(--red); border-color: #f6c6c1; }
   .apt-actions .btn-nope:hover { background: var(--red-tint); }
   .apt-actions .btn-like { color: #1e8e3e; border-color: #b7dfc0; }
   .apt-actions .btn-like:hover { background: #e6f4ea; }
 
-  .filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
   .filter-row button { margin: 0; height: 26px; padding: 0 12px; font-size: 0.68rem; font-weight: 700;
     line-height: normal; box-shadow: none; border-radius: 999px; border: 1.5px solid var(--gray-200);
     background: #fff; color: var(--gray-600); cursor: pointer; display: inline-flex; align-items: center; }
   .filter-row button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
-  .filter-row.last { margin-bottom: 12px; }
 
   .apt-card.filtered-out { display: none; }
 
@@ -108,32 +120,44 @@
   {% set ICON_SCHEDULE = "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" %}
   {% set ICON_CHECK = "M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" %}
 
-  <div class="refresh-row">
-    <span class="status">
-      {{ cards|length }} found so far{% if running %} · scanning now (paced, to go easy on Funda)…{% endif %}
-    </span>
-    <form method="post" action="{{ url_for('apartments_refresh') }}">
-      <button type="submit" class="btn-secondary" {% if running %}disabled{% endif %}>{{ 'Scanning…' if running else 'Scan more now' }}</button>
-    </form>
+  <div class="header-card">
+    <div class="header-top">
+      <div>
+        <div class="page-title">NL Apartments</div>
+        <div class="status">
+          {{ cards|length }} found{% if running %} · scanning now (paced, to go easy on Funda)…{% endif %}
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('apartments_refresh') }}">
+        <button type="submit" class="btn-secondary" {% if running %}disabled{% endif %}>{{ 'Scanning…' if running else 'Scan more now' }}</button>
+      </form>
+    </div>
+    <p class="criteria">Up to mortgage budget by energy label · ~100 m² · garden · 3+ bedrooms · ≤15 min biking to any vrijeschool · ≤1h20 train ride to Utrecht Centraal (ride time only, not getting to the station). Experimental — scans automatically 4x a day, no cap on how many accumulate.</p>
   </div>
-
-  <p class="hint" style="margin:0 0 12px 0;">Mortgage budget by energy label · ~100 m² · garden · 3+ bedrooms · within 15 min biking of any vrijeschool · train ride itself under 1h20 to Utrecht Centraal (not counting getting to the station). Experimental - scans automatically 4x a day, no cap on how many accumulate; use "Scan more now" to check sooner.</p>
 
   {% if error %}<div class="errors">{{ error }}</div>{% endif %}
 
   {% if not cards %}
     <div class="card"><p class="hint" style="margin:0;">No matches found yet — the scheduler checks 4 times a day, or hit "Scan more now" above.</p></div>
   {% else %}
-    <div class="filter-row" id="filter-row-tag">
-      <button type="button" class="{{ 'active' if initial_tag_filter == 'all' }}" data-filter="all" onclick="setTagFilter('all')">All</button>
-      <button type="button" class="{{ 'active' if initial_tag_filter == 'needs_work' }}" data-filter="needs_work" onclick="setTagFilter('needs_work')">Needs work</button>
-      <button type="button" class="{{ 'active' if initial_tag_filter == 'move_in_ready' }}" data-filter="move_in_ready" onclick="setTagFilter('move_in_ready')">Move-in ready</button>
-      <button type="button" class="{{ 'active' if initial_tag_filter == 'untagged' }}" data-filter="untagged" onclick="setTagFilter('untagged')">Untagged</button>
-    </div>
-    <div class="filter-row last" id="filter-row-viewed">
-      <button type="button" class="{{ 'active' if initial_viewed_filter == 'all' }}" data-filter="all" onclick="setViewedFilter('all')">All</button>
-      <button type="button" class="{{ 'active' if initial_viewed_filter == 'viewed' }}" data-filter="viewed" onclick="setViewedFilter('viewed')">Viewed</button>
-      <button type="button" class="{{ 'active' if initial_viewed_filter == 'not_viewed' }}" data-filter="not_viewed" onclick="setViewedFilter('not_viewed')">Not viewed</button>
+    <div class="filters-card">
+      <div class="filter-group">
+        <span class="filter-label">Condition</span>
+        <div class="filter-row" id="filter-row-tag">
+          <button type="button" class="{{ 'active' if initial_tag_filter == 'all' }}" data-filter="all" onclick="setTagFilter('all')">All</button>
+          <button type="button" class="{{ 'active' if initial_tag_filter == 'needs_work' }}" data-filter="needs_work" onclick="setTagFilter('needs_work')">Needs work</button>
+          <button type="button" class="{{ 'active' if initial_tag_filter == 'move_in_ready' }}" data-filter="move_in_ready" onclick="setTagFilter('move_in_ready')">Move-in ready</button>
+          <button type="button" class="{{ 'active' if initial_tag_filter == 'untagged' }}" data-filter="untagged" onclick="setTagFilter('untagged')">Untagged</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Viewed</span>
+        <div class="filter-row" id="filter-row-viewed">
+          <button type="button" class="{{ 'active' if initial_viewed_filter == 'all' }}" data-filter="all" onclick="setViewedFilter('all')">All</button>
+          <button type="button" class="{{ 'active' if initial_viewed_filter == 'viewed' }}" data-filter="viewed" onclick="setViewedFilter('viewed')">Viewed</button>
+          <button type="button" class="{{ 'active' if initial_viewed_filter == 'not_viewed' }}" data-filter="not_viewed" onclick="setViewedFilter('not_viewed')">Not viewed</button>
+        </div>
+      </div>
     </div>
     <div class="apt-grid" id="apt-grid">
       {% for c in cards %}
@@ -173,11 +197,9 @@
               {% endif %}
               {% if c.listed_short %}<span class="pill" title="{{ c.listed_title }}">{{ icon(ICON_SCHEDULE) }}{{ c.listed_short }}</span>{% endif %}
             </div>
-            <div class="tag-row">
+            <div class="apt-actions">
               <button type="button" class="tag-needs_work {{ 'active' if c.condition_tag == 'needs_work' }}" onclick="tagCard('{{ c.id }}', 'needs_work', this)" title="Needs work" aria-label="Needs work">{{ icon(ICON_TOOL) }}</button>
               <button type="button" class="tag-move_in_ready {{ 'active' if c.condition_tag == 'move_in_ready' }}" onclick="tagCard('{{ c.id }}', 'move_in_ready', this)" title="Move-in ready" aria-label="Move-in ready">{{ icon(ICON_CHECK) }}</button>
-            </div>
-            <div class="apt-actions">
               <button type="button" class="btn-nope" onclick="apartmentAction('{{ c.id }}', 'left', this)" title="Not interested" aria-label="Not interested">{{ icon(ICON_NOPE) }}</button>
               <a href="{{ c.tracked_url }}" target="_blank" rel="noopener" title="View on Funda" aria-label="View on Funda">{{ icon(ICON_OPEN) }}</a>
               <button type="button" class="btn-like" onclick="apartmentAction('{{ c.id }}', 'right', this)" title="Favorite" aria-label="Favorite">{{ icon(ICON_LIKE) }}</button>
@@ -217,7 +239,7 @@
         .then((data) => {
           if (!data.ok) return;
           const card = button.closest('.apt-card');
-          card.querySelectorAll('.tag-row button').forEach((btn) => btn.classList.remove('active'));
+          card.querySelectorAll('.tag-needs_work, .tag-move_in_ready').forEach((btn) => btn.classList.remove('active'));
           if (data.tag) {
             button.classList.add('active');
             card.dataset.tag = data.tag;
