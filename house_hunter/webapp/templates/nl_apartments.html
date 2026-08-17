@@ -36,28 +36,50 @@
   .apt-card .addr { font-size: 0.62rem; color: rgba(255,255,255,0.85); text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
   .apt-card .title { font-weight: 800; font-size: 0.8rem; text-shadow: 0 1px 4px rgba(0,0,0,0.6); line-height: 1.25; }
 
-  .apt-card .body { padding: 8px 10px 10px 10px; }
+  .apt-card .body { padding: 10px; }
   .apt-card .price { font-size: 0.92rem; font-weight: 800; }
   .apt-card .budget-text { font-size: 0.6rem; font-weight: 700; margin-top: 1px; }
-  .pill-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 6px; }
+
+  /* Plain facts line (bedrooms/area/garden/energy) - deliberately not
+     boxed as pills, so it reads as one calm line instead of competing
+     with the highlighted school/commute info below. */
+  .facts-row { display: flex; align-items: center; gap: 8px; margin-top: 7px; font-size: 0.66rem;
+    font-weight: 600; color: var(--gray-600); }
+  .facts-row .fact { display: inline-flex; align-items: center; gap: 3px; }
+  .facts-row .fact svg { width: 11px; height: 11px; flex-shrink: 0; }
+  .facts-row .fact.garden { color: #146c2e; }
+  .energy-dot { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
+    border-radius: 50%; font-size: 0.52rem; font-weight: 800; margin-left: auto; }
+
+  /* Schools get their own tinted block, one per line, so a 2-school card
+     doesn't just look like more wrapped pills. */
+  .schools-block { margin-top: 7px; padding: 6px 8px; background: #e6f4ea; border-radius: 8px; }
+  .schools-block a, .schools-block span.school-line { display: flex; align-items: center; gap: 4px;
+    font-size: 0.62rem; font-weight: 700; color: #146c2e; text-decoration: none; padding: 1px 0; }
+  .schools-block svg { width: 10px; height: 10px; flex-shrink: 0; }
+
+  .meta-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 6px; }
   .pill { display: inline-flex; align-items: center; gap: 3px; background: var(--gray-100); color: var(--gray-600);
     font-size: 0.6rem; font-weight: 700; padding: 3px 7px; border-radius: 8px; text-decoration: none; }
   .pill svg { width: 10px; height: 10px; flex-shrink: 0; }
   .pill.ok { background: #e6f4ea; color: #146c2e; }
-  .energy-dot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
-    border-radius: 50%; font-size: 0.56rem; font-weight: 800; }
 
-  .apt-actions { display: flex; gap: 6px; margin-top: 8px; }
-  .apt-actions button { margin: 0; flex: 1; height: 30px; border-radius: 8px; padding: 0; font-size: 0;
-    line-height: normal; box-shadow: none; display: flex; align-items: center; justify-content: center; }
-  .apt-actions .btn-nope { background: var(--red-tint); border: none; }
-  .apt-actions .btn-nope svg { fill: var(--red); }
-  .apt-actions .btn-like { background: #e6f4ea; border: none; }
-  .apt-actions .btn-like svg { fill: #1e8e3e; }
-  .apt-actions button svg { pointer-events: none; width: 16px; height: 16px; display: block; }
-  .apt-actions .funda-link { flex: 1; display: flex; align-items: center; justify-content: center;
-    height: 30px; border-radius: 8px; background: var(--gray-100); text-decoration: none; }
-  .apt-actions .funda-link svg { width: 16px; height: 16px; fill: var(--gray-600); }
+  /* Tag row and action row share the same height/radius/border so they
+     read as one matched control group, not two different UIs stacked. */
+  .tag-row, .apt-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .tag-row button, .apt-actions button, .apt-actions a {
+    margin: 0; flex: 1; height: 32px; border-radius: 9px; padding: 0 4px; font-size: 0.62rem;
+    font-weight: 700; line-height: normal; box-shadow: none; border: 1.5px solid var(--gray-200);
+    background: #fff; color: var(--gray-600); cursor: pointer; text-decoration: none;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .tag-row button svg, .apt-actions button svg, .apt-actions a svg { width: 13px; height: 13px; flex-shrink: 0; pointer-events: none; }
+  .tag-row button.tag-needs_work.active { background: #fce8e6; color: #c5221f; border-color: #f6c6c1; }
+  .tag-row button.tag-move_in_ready.active { background: #e6f4ea; color: #146c2e; border-color: #b7dfc0; }
+  .apt-actions .btn-nope { color: var(--red); border-color: #f6c6c1; }
+  .apt-actions .btn-nope:hover { background: var(--red-tint); }
+  .apt-actions .btn-like { color: #1e8e3e; border-color: #b7dfc0; }
+  .apt-actions .btn-like:hover { background: #e6f4ea; }
 
   .filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
   .filter-row button { margin: 0; height: 26px; padding: 0 12px; font-size: 0.68rem; font-weight: 700;
@@ -67,13 +89,6 @@
   .filter-row.last { margin-bottom: 12px; }
 
   .apt-card.filtered-out { display: none; }
-  .tag-row { display: flex; gap: 6px; margin-top: 6px; }
-  .tag-row button { margin: 0; flex: 1; height: 26px; border-radius: 7px; padding: 0 4px; font-size: 0.6rem;
-    font-weight: 700; line-height: normal; box-shadow: none; border: 1.5px solid var(--gray-200);
-    background: #fff; color: var(--gray-600); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; }
-  .tag-row button svg { width: 11px; height: 11px; flex-shrink: 0; }
-  .tag-row button.tag-needs_work.active { background: #fce8e6; color: #c5221f; border-color: #f6c6c1; }
-  .tag-row button.tag-move_in_ready.active { background: #e6f4ea; color: #146c2e; border-color: #b7dfc0; }
 
   .empty-state { text-align: center; color: var(--gray-500); padding: 40px 20px; font-size: 0.8rem; }
 </style>
@@ -137,19 +152,25 @@
           <div class="body">
             <div class="price" style="color:{{ c.price_color or 'var(--ink)' }};">{{ c.price }}</div>
             {% if c.budget_total_text %}<div class="budget-text" style="color:{{ c.price_color }};">of {{ c.budget_total_text }} budget</div>{% endif %}
-            <div class="pill-row">
-              <span class="pill" title="{{ c.bedrooms }} bedrooms">{{ icon(ICON_ROOMS) }}{{ c.bedrooms }}</span>
-              {% if c.living_area %}<span class="pill" title="{{ c.living_area }} m² living">{{ icon(ICON_AREA) }}{{ c.living_area }} m²</span>{% endif %}
-              <span class="pill ok" title="Has a garden">{{ icon(ICON_GARDEN) }}Garden</span>
-              {% for s in c.schools %}
-                {% if s.maps_url %}<a class="pill ok" href="{{ s.maps_url }}" target="_blank" rel="noopener" title="{{ s.km }} km to {{ s.name }} - view route">{{ icon(ICON_BIKE) }}{{ s.minutes }} min · {{ s.name }}</a>
-                {% else %}<span class="pill ok" title="{{ s.km }} km to {{ s.name }}">{{ icon(ICON_BIKE) }}{{ s.minutes }} min · {{ s.name }}</span>{% endif %}
-              {% endfor %}
-              {% if c.utrecht_minutes is not none %}
-                {% if c.utrecht_maps_url %}<a class="pill ok" href="{{ c.utrecht_maps_url }}" target="_blank" rel="noopener" title="{{ c.utrecht_minutes }} min train ride to Utrecht Centraal (not counting getting to the station) - view route">{{ icon(ICON_TRAIN) }}{{ c.utrecht_minutes }} min UT</a>
-                {% else %}<span class="pill ok" title="{{ c.utrecht_minutes }} min train ride to Utrecht Centraal (not counting getting to the station)">{{ icon(ICON_TRAIN) }}{{ c.utrecht_minutes }} min UT</span>{% endif %}
-              {% endif %}
+            <div class="facts-row">
+              <span class="fact" title="{{ c.bedrooms }} bedrooms">{{ icon(ICON_ROOMS) }}{{ c.bedrooms }}</span>
+              {% if c.living_area %}<span class="fact" title="{{ c.living_area }} m² living">{{ icon(ICON_AREA) }}{{ c.living_area }} m²</span>{% endif %}
+              <span class="fact garden" title="Has a garden">{{ icon(ICON_GARDEN) }}Garden</span>
               <span class="energy-dot" style="background:{{ c.energy_bg }};color:{{ c.energy_text }};" title="Energy label {{ c.energy_label }}">{{ c.energy_label }}</span>
+            </div>
+            {% if c.schools %}
+              <div class="schools-block">
+                {% for s in c.schools %}
+                  {% if s.maps_url %}<a href="{{ s.maps_url }}" target="_blank" rel="noopener" title="{{ s.km }} km - view route">{{ icon(ICON_BIKE) }}{{ s.minutes }} min · {{ s.name }}</a>
+                  {% else %}<span class="school-line" title="{{ s.km }} km">{{ icon(ICON_BIKE) }}{{ s.minutes }} min · {{ s.name }}</span>{% endif %}
+                {% endfor %}
+              </div>
+            {% endif %}
+            <div class="meta-row">
+              {% if c.utrecht_minutes is not none %}
+                {% if c.utrecht_maps_url %}<a class="pill ok" href="{{ c.utrecht_maps_url }}" target="_blank" rel="noopener" title="{{ c.utrecht_minutes }} min train ride to Utrecht Centraal (not counting getting to the station) - view route">{{ icon(ICON_TRAIN) }}{{ c.utrecht_minutes }} min to Utrecht</a>
+                {% else %}<span class="pill ok" title="{{ c.utrecht_minutes }} min train ride to Utrecht Centraal (not counting getting to the station)">{{ icon(ICON_TRAIN) }}{{ c.utrecht_minutes }} min to Utrecht</span>{% endif %}
+              {% endif %}
               {% if c.listed_short %}<span class="pill" title="{{ c.listed_title }}">{{ icon(ICON_SCHEDULE) }}{{ c.listed_short }}</span>{% endif %}
             </div>
             <div class="tag-row">
@@ -157,9 +178,9 @@
               <button type="button" class="tag-move_in_ready {{ 'active' if c.condition_tag == 'move_in_ready' }}" onclick="tagCard('{{ c.id }}', 'move_in_ready', this)">{{ icon(ICON_CHECK) }}Move-in ready</button>
             </div>
             <div class="apt-actions">
-              <button type="button" class="btn-nope" onclick="apartmentAction('{{ c.id }}', 'left', this)" aria-label="Not interested">{{ icon(ICON_NOPE, 16) }}</button>
-              <a class="funda-link" href="{{ c.tracked_url }}" target="_blank" rel="noopener" aria-label="View on Funda">{{ icon(ICON_OPEN, 16) }}</a>
-              <button type="button" class="btn-like" onclick="apartmentAction('{{ c.id }}', 'right', this)" aria-label="Favorite">{{ icon(ICON_LIKE, 16) }}</button>
+              <button type="button" class="btn-nope" onclick="apartmentAction('{{ c.id }}', 'left', this)" aria-label="Not interested">{{ icon(ICON_NOPE) }}Pass</button>
+              <a href="{{ c.tracked_url }}" target="_blank" rel="noopener" aria-label="View on Funda">{{ icon(ICON_OPEN) }}Funda</a>
+              <button type="button" class="btn-like" onclick="apartmentAction('{{ c.id }}', 'right', this)" aria-label="Favorite">{{ icon(ICON_LIKE) }}Like</button>
             </div>
           </div>
         </div>
