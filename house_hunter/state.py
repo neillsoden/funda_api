@@ -137,6 +137,16 @@ def _connect():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS apartment_filter_prefs (
+                username TEXT PRIMARY KEY,
+                tag_filter TEXT NOT NULL DEFAULT 'all',
+                viewed_filter TEXT NOT NULL DEFAULT 'all',
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
         yield conn
         conn.commit()
     finally:
@@ -489,3 +499,30 @@ def condition_tags(listing_ids: list[str]) -> dict[str, str]:
             listing_ids,
         )
         return dict(rows)
+
+
+def save_apartment_filter_prefs(username: str, tag_filter: str, viewed_filter: str) -> None:
+    """Remembers the last tag/viewed filter selection on /apartments per
+    logged-in user, so it's restored on their next visit (any device)."""
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO apartment_filter_prefs (username, tag_filter, viewed_filter, updated_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(username) DO UPDATE SET
+                tag_filter = excluded.tag_filter,
+                viewed_filter = excluded.viewed_filter,
+                updated_at = datetime('now')
+            """,
+            (username, tag_filter, viewed_filter),
+        )
+
+
+def get_apartment_filter_prefs(username: str) -> tuple[str, str]:
+    """(tag_filter, viewed_filter), defaulting to ("all", "all") if unset."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT tag_filter, viewed_filter FROM apartment_filter_prefs WHERE username = ?",
+            (username,),
+        ).fetchone()
+    return (row[0], row[1]) if row else ("all", "all")

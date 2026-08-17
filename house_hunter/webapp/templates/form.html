@@ -217,6 +217,45 @@
     <p class="hint">Every listing is automatically checked against the nearest vrijeschool (from vrijescholen.nl), no address entry needed. Leave school distance blank to not filter on it (still shown either way). Set fixed times to check at specific times every day (e.g. "11:00, 21:00") — takes priority over the frequency dropdown above; leave blank to just use the simple interval instead.</p>
     </div>
 
+    <h2>NL Apartments</h2>
+    <div class="card">
+    <div class="row">
+      <div>
+        <label for="apartments_scan_interval_minutes">How often to scan</label>
+        <select id="apartments_scan_interval_minutes" name="apartments_scan_interval_minutes">
+          {% for minutes, label in apartments_interval_options %}
+            <option value="{{ minutes }}" {% if config.nl_apartments.scan_interval_minutes == minutes %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="apartments_min_bedrooms">Min bedrooms</label>
+        <input type="number" id="apartments_min_bedrooms" name="apartments_min_bedrooms" value="{{ config.nl_apartments.min_bedrooms }}">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="apartments_min_area">Min area (m²)</label>
+        <input type="number" id="apartments_min_area" name="apartments_min_area" value="{{ config.nl_apartments.min_area }}">
+      </div>
+      <div>
+        <label for="apartments_max_area">Max area (m²)</label>
+        <input type="number" id="apartments_max_area" name="apartments_max_area" value="{{ config.nl_apartments.max_area }}">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="apartments_max_school_minutes">Max biking time to a vrijeschool (min)</label>
+        <input type="number" id="apartments_max_school_minutes" name="apartments_max_school_minutes" value="{{ config.nl_apartments.max_school_minutes }}">
+      </div>
+      <div>
+        <label for="apartments_max_utrecht_minutes">Max train ride to Utrecht Centraal (min)</label>
+        <input type="number" id="apartments_max_utrecht_minutes" name="apartments_max_utrecht_minutes" value="{{ config.nl_apartments.max_utrecht_minutes }}">
+      </div>
+    </div>
+    <p class="hint">Nationwide, garden apartments only (not editable — it's a hard requirement). Budget reuses the mortgage table above, by energy label. This search isn't emailed, it just keeps building up the list at /apartments in the background. Changes take effect on the next scan, no redeploy needed.</p>
+    </div>
+
     <h2>Email &amp; people</h2>
     <div class="card">
     <div class="row">

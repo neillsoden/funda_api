@@ -116,16 +116,7 @@ def _card_dict(listing, schools: list[dict], utrecht_ride_minutes: float, mortga
     }
 
 
-def scan_batch(
-    *,
-    min_area: int = 90,
-    max_area: int = 110,
-    min_bedrooms: int = 3,
-    max_price: int | None = None,
-    max_school_minutes: float = 15,
-    max_utrecht_minutes: float = 80,
-    batch_pages: int = 1,
-) -> int:
+def scan_batch(*, batch_pages: int = 1) -> int:
     """Scans one small batch (batch_pages search-result pages, ~15 listings
     each) starting from the persisted cursor, evaluates only the ones not
     already scanned before, and persists any real matches. Returns how many
@@ -134,13 +125,25 @@ def scan_batch(
     rather than scanning everything nationwide in one go. No cap on total
     accumulated matches - it just keeps finding more over time.
 
+    Criteria (area/bedrooms/school/Utrecht thresholds) come from
+    config.json's nl_apartments block, editable on the Preferences page.
     Budget is the same per-energy-label mortgage table from the bank used
     for the Houses search (config.json search.mortgage_budget), not a flat
-    price cap - a good energy label buys more borrowing capacity. max_price
-    only overrides that if explicitly passed.
+    price cap - a good energy label buys more borrowing capacity.
     """
-    mortgage_budget = load_config()["search"].get("mortgage_budget") or {}
-    price_ceiling = max_price or (max(mortgage_budget.values()) if mortgage_budget else 400_000)
+    config = load_config()
+    apt_cfg = config.get("nl_apartments", {})
+    # `or` (not .get(key, default)) deliberately - a blank form field saves
+    # as a literal None in config.json, which .get() would happily return
+    # instead of falling back to the default.
+    min_area = apt_cfg.get("min_area") or 90
+    max_area = apt_cfg.get("max_area") or 110
+    min_bedrooms = apt_cfg.get("min_bedrooms") or 3
+    max_school_minutes = apt_cfg.get("max_school_minutes") or 15
+    max_utrecht_minutes = apt_cfg.get("max_utrecht_minutes") or 80
+
+    mortgage_budget = config["search"].get("mortgage_budget") or {}
+    price_ceiling = max(mortgage_budget.values()) if mortgage_budget else 400_000
 
     start_page = get_nl_apartments_scan_cursor()
 

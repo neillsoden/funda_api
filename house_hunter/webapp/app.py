@@ -42,6 +42,7 @@ from house_hunter.state import (  # noqa: E402
     clicked_listing_ids,
     condition_tags,
     favorited_by,
+    get_apartment_filter_prefs,
     nl_apartment_matches,
     record_click,
     recent_run_logs,
@@ -50,6 +51,7 @@ from house_hunter.state import (  # noqa: E402
     remove_favorite,
     remove_nl_apartment_match,
     remove_rejected,
+    save_apartment_filter_prefs,
     set_condition_tag,
     under_bid_listing_ids,
 )
@@ -78,6 +80,16 @@ app.config.update(
 FREQUENCY_OPTIONS = ["hourly", "twice_daily", "daily", "weekly"]
 CATEGORY_OPTIONS = ["buy", "rent"]
 OBJECT_TYPE_OPTIONS = ["house", "apartment"]
+APARTMENTS_INTERVAL_OPTIONS = [
+    (10, "Every 10 minutes"),
+    (15, "Every 15 minutes"),
+    (30, "Every 30 minutes"),
+    (60, "Every hour"),
+    (120, "Every 2 hours"),
+    (360, "4 times a day"),
+    (720, "Twice a day"),
+    (1440, "Once a day"),
+]
 
 _last_saved: str | None = None
 
@@ -266,6 +278,7 @@ def form():
         frequency_options=FREQUENCY_OPTIONS,
         category_options=CATEGORY_OPTIONS,
         object_type_options=OBJECT_TYPE_OPTIONS,
+        apartments_interval_options=APARTMENTS_INTERVAL_OPTIONS,
         last_saved=_last_saved,
         run_status=_run_status,
         recent_logs=recent_run_logs()[:5],
@@ -372,6 +385,11 @@ def save():
     # carry the existing value through so saving the form doesn't wipe it out.
     existing_mortgage_budget = load_config()["search"].get("mortgage_budget") or {}
 
+    apartments_interval = read_int("apartments_scan_interval_minutes") or 360
+    valid_intervals = {minutes for minutes, _ in APARTMENTS_INTERVAL_OPTIONS}
+    if apartments_interval not in valid_intervals:
+        errors.append("Invalid NL Apartments scan interval")
+
     config = {
         "search": {
             "locations": locations,
@@ -399,6 +417,14 @@ def save():
             "timezone": form_data.get("timezone", "Europe/Amsterdam").strip() or "Europe/Amsterdam",
         },
         "server": {"public_base_url": form_data.get("public_base_url", "").strip().rstrip("/")},
+        "nl_apartments": {
+            "scan_interval_minutes": apartments_interval,
+            "min_area": read_int("apartments_min_area"),
+            "max_area": read_int("apartments_max_area"),
+            "min_bedrooms": read_int("apartments_min_bedrooms"),
+            "max_school_minutes": read_int("apartments_max_school_minutes"),
+            "max_utrecht_minutes": read_int("apartments_max_utrecht_minutes"),
+        },
     }
 
     if not locations:
@@ -411,6 +437,7 @@ def save():
             frequency_options=FREQUENCY_OPTIONS,
             category_options=CATEGORY_OPTIONS,
             object_type_options=OBJECT_TYPE_OPTIONS,
+            apartments_interval_options=APARTMENTS_INTERVAL_OPTIONS,
             last_saved=_last_saved,
             run_status=_run_status,
             recent_logs=recent_run_logs()[:5],
@@ -521,12 +548,27 @@ def rejected():
     return render_template("rejected.html", listings=listings)
 
 
+_EDUCATION_TYPE_LABELS = {
+    "Primair onderwijs": ("Primary", "primary"),
+    "Initiatief primair onderwijs": ("Primary (initiative)", "primary"),
+    "Voortgezet onderwijs": ("High school", "secondary"),
+    "Initiatief voortgezet onderwijs": ("High school (initiative)", "secondary"),
+    "Speciaal onderwijs": ("Special education", "other"),
+    "Vrijeschoolbestuur": ("School board", "other"),
+    "Onderwijsorganisatie": ("Education org", "other"),
+    "Overig": ("Other", "other"),
+}
+
+
 @app.route("/schools", methods=["GET"])
 @login_required
 def schools():
     all_schools = list_all_schools()
     grouped: dict[str, list[dict]] = {}
     for school in all_schools:
+        label, kind = _EDUCATION_TYPE_LABELS.get(school["education_type"], (None, None))
+        school["education_label"] = label
+        school["education_kind"] = kind
         grouped.setdefault(school["city"] or "Unknown", []).append(school)
     return render_template("schools.html", grouped=dict(sorted(grouped.items())))
 
@@ -626,12 +668,26 @@ def apartments():
         card["viewed"] = card["id"] in viewed_ids
         card["tracked_url"] = f"/click/{card['id']}?to={quote(card['url'], safe='')}"
 
+    tag_filter, viewed_filter = get_apartment_filter_prefs(session["user"])
+
     return render_template(
         "nl_apartments.html",
         cards=cards,
         running=_apartments_status["running"],
         error=_apartments_status["error"],
+        initial_tag_filter=tag_filter,
+        initial_viewed_filter=viewed_filter,
     )
+
+
+@app.route("/apartments/filter-prefs", methods=["POST"])
+@login_required
+def apartments_filter_prefs():
+    data = request.get_json(silent=True) or {}
+    tag_filter = data.get("tag_filter", "all")
+    viewed_filter = data.get("viewed_filter", "all")
+    save_apartment_filter_prefs(session["user"], tag_filter, viewed_filter)
+    return jsonify({"ok": True})
 
 
 @app.route("/apartments/refresh", methods=["POST"])

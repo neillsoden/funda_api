@@ -23,13 +23,6 @@ _INTERVAL_SECONDS = {
     "weekly": 7 * 24 * 60 * 60,
 }
 
-# Temporarily every 10 min (was 4x/day, i.e. every 6h) while actively
-# testing/tuning the criteria - turn back down once satisfied, this is
-# hitting Funda much more often. Runs here (not triggered by webapp page
-# views) so there's exactly one process ever scanning apartments - avoids
-# two containers racing on the same cursor/scanned-listing state.
-_APARTMENTS_INTERVAL_SECONDS = 10 * 60
-
 
 def _seconds_until_next_time(times: list[str], tz_name: str) -> tuple[float, str]:
     """times: e.g. ["11:00", "21:00"]. Returns (seconds_to_wait, description)."""
@@ -47,6 +40,10 @@ def _seconds_until_next_time(times: list[str], tz_name: str) -> tuple[float, str
 
 
 def _run_apartments_loop() -> None:
+    """Interval is read from config fresh each cycle (nl_apartments.
+    scan_interval_minutes, editable on the Preferences page) rather than a
+    fixed constant, so changing it in the webapp takes effect on the next
+    scan without a redeploy."""
     from house_hunter.apartments import scan_until_target
     from house_hunter.state import record_run
 
@@ -59,8 +56,11 @@ def _run_apartments_loop() -> None:
             print("[apartments] scan failed:")
             traceback.print_exc()
             record_run("apartments_scan", "error", detail=traceback.format_exc(limit=1))
-        print(f"[apartments] sleeping {_APARTMENTS_INTERVAL_SECONDS}s until next scan")
-        time.sleep(_APARTMENTS_INTERVAL_SECONDS)
+
+        minutes = load_config().get("nl_apartments", {}).get("scan_interval_minutes") or 360
+        seconds = max(60, int(minutes) * 60)  # floor at 1 min - avoid a zero/garbage config value hammering Funda
+        print(f"[apartments] sleeping {seconds}s until next scan")
+        time.sleep(seconds)
 
 
 def main() -> None:

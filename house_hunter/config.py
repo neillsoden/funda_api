@@ -88,6 +88,21 @@ DEFAULT_CONFIG: dict[str, Any] = {
         # leave blank and emails link straight to Funda instead.
         "public_base_url": "",
     },
+    "nl_apartments": {
+        # How often the scheduler runs a paced NL Apartments scan, in
+        # minutes. Independent of the Houses "schedule" above - this search
+        # isn't emailed, just accumulates in the background.
+        "scan_interval_minutes": 360,
+        # Search criteria - nationwide, garden apartments only (not
+        # editable here; garden is a hard requirement in apartments.py).
+        # Budget reuses search.mortgage_budget above (same bank table, by
+        # energy label) rather than a separate flat price cap.
+        "min_area": 90,
+        "max_area": 110,
+        "min_bedrooms": 3,
+        "max_school_minutes": 15,
+        "max_utrecht_minutes": 80,
+    },
 }
 
 

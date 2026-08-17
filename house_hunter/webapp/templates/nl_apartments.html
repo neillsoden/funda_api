@@ -110,15 +110,15 @@
     <div class="card"><p class="hint" style="margin:0;">No matches found yet — the scheduler checks 4 times a day, or hit "Scan more now" above.</p></div>
   {% else %}
     <div class="filter-row" id="filter-row-tag">
-      <button type="button" class="active" data-filter="all" onclick="setTagFilter('all')">All</button>
-      <button type="button" data-filter="needs_work" onclick="setTagFilter('needs_work')">Needs work</button>
-      <button type="button" data-filter="move_in_ready" onclick="setTagFilter('move_in_ready')">Move-in ready</button>
-      <button type="button" data-filter="untagged" onclick="setTagFilter('untagged')">Untagged</button>
+      <button type="button" class="{{ 'active' if initial_tag_filter == 'all' }}" data-filter="all" onclick="setTagFilter('all')">All</button>
+      <button type="button" class="{{ 'active' if initial_tag_filter == 'needs_work' }}" data-filter="needs_work" onclick="setTagFilter('needs_work')">Needs work</button>
+      <button type="button" class="{{ 'active' if initial_tag_filter == 'move_in_ready' }}" data-filter="move_in_ready" onclick="setTagFilter('move_in_ready')">Move-in ready</button>
+      <button type="button" class="{{ 'active' if initial_tag_filter == 'untagged' }}" data-filter="untagged" onclick="setTagFilter('untagged')">Untagged</button>
     </div>
     <div class="filter-row last" id="filter-row-viewed">
-      <button type="button" class="active" data-filter="all" onclick="setViewedFilter('all')">All</button>
-      <button type="button" data-filter="viewed" onclick="setViewedFilter('viewed')">Viewed</button>
-      <button type="button" data-filter="not_viewed" onclick="setViewedFilter('not_viewed')">Not viewed</button>
+      <button type="button" class="{{ 'active' if initial_viewed_filter == 'all' }}" data-filter="all" onclick="setViewedFilter('all')">All</button>
+      <button type="button" class="{{ 'active' if initial_viewed_filter == 'viewed' }}" data-filter="viewed" onclick="setViewedFilter('viewed')">Viewed</button>
+      <button type="button" class="{{ 'active' if initial_viewed_filter == 'not_viewed' }}" data-filter="not_viewed" onclick="setViewedFilter('not_viewed')">Not viewed</button>
     </div>
     <div class="apt-grid" id="apt-grid">
       {% for c in cards %}
@@ -207,14 +207,23 @@
         });
     }
 
-    let tagFilter = 'all';
-    let viewedFilter = 'all';
+    let tagFilter = {{ (initial_tag_filter or 'all')|tojson }};
+    let viewedFilter = {{ (initial_viewed_filter or 'all')|tojson }};
+
+    function saveFilterPrefs() {
+      fetch('/apartments/filter-prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag_filter: tagFilter, viewed_filter: viewedFilter }),
+      });
+    }
     function setTagFilter(filter) {
       tagFilter = filter;
       document.querySelectorAll('#filter-row-tag button').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.filter === filter);
       });
       applyFilter();
+      saveFilterPrefs();
     }
     function setViewedFilter(filter) {
       viewedFilter = filter;
@@ -222,6 +231,7 @@
         btn.classList.toggle('active', btn.dataset.filter === filter);
       });
       applyFilter();
+      saveFilterPrefs();
     }
     function applyFilter() {
       document.querySelectorAll('.apt-card').forEach((card) => {
@@ -238,5 +248,7 @@
         card.classList.toggle('filtered-out', !(tagOk && viewedOk));
       });
     }
+
+    applyFilter();
   </script>
 {% endblock %}

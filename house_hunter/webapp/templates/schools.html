@@ -11,6 +11,11 @@
   .school-row .link { flex-shrink: 0; font-size: 0.85rem; font-weight: 700; text-decoration: none; color: var(--red); }
   .school-row .link:hover { text-decoration: underline; }
   .no-link { color: var(--gray-500); font-size: 0.85rem; }
+  .school-row .name-row { display: flex; align-items: center; gap: 8px; }
+  .edu-badge { font-size: 0.66rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .edu-badge.primary { background: #e8f0fe; color: #1967d2; }
+  .edu-badge.secondary { background: #fce8e6; color: #c5221f; }
+  .edu-badge.other { background: var(--gray-100); color: var(--gray-600); }
 </style>
 {% endblock %}
 {% block content %}
@@ -26,7 +31,10 @@
         {% for school in schools %}
           <div class="school-row">
             <div>
-              <div class="name">{{ school.title }}</div>
+              <div class="name-row">
+                <div class="name">{{ school.title }}</div>
+                {% if school.education_label %}<span class="edu-badge {{ school.education_kind }}">{{ school.education_label }}</span>{% endif %}
+              </div>
               {% if school.street %}
                 <div class="addr">{{ school.street }} {{ school.housenumber or '' }}{% if school.postcode %}, {{ school.postcode }}{% endif %}</div>
               {% endif %}
