@@ -256,6 +256,49 @@
     <p class="hint">Nationwide, garden apartments only (not editable — it's a hard requirement). Budget reuses the mortgage table above, by energy label. This search isn't emailed, it just keeps building up the list at /apartments in the background. Changes take effect on the next scan, no redeploy needed.</p>
     </div>
 
+    <h2>NL Rentals</h2>
+    <div class="card">
+    <div class="row">
+      <div>
+        <label for="rentals_scan_interval_minutes">How often to scan</label>
+        <select id="rentals_scan_interval_minutes" name="rentals_scan_interval_minutes">
+          {% for minutes, label in apartments_interval_options %}
+            <option value="{{ minutes }}" {% if config.nl_rentals.scan_interval_minutes == minutes %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="rentals_min_bedrooms">Min bedrooms</label>
+        <input type="number" id="rentals_min_bedrooms" name="rentals_min_bedrooms" value="{{ config.nl_rentals.min_bedrooms }}">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="rentals_min_area">Min area (m²)</label>
+        <input type="number" id="rentals_min_area" name="rentals_min_area" value="{{ config.nl_rentals.min_area }}">
+      </div>
+      <div>
+        <label for="rentals_max_area">Max area (m²)</label>
+        <input type="number" id="rentals_max_area" name="rentals_max_area" value="{{ config.nl_rentals.max_area }}">
+      </div>
+      <div>
+        <label for="rentals_max_price">Max monthly price (€)</label>
+        <input type="number" id="rentals_max_price" name="rentals_max_price" value="{{ config.nl_rentals.max_price }}">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="rentals_max_school_minutes">Max biking time to a vrijeschool (min)</label>
+        <input type="number" id="rentals_max_school_minutes" name="rentals_max_school_minutes" value="{{ config.nl_rentals.max_school_minutes }}">
+      </div>
+      <div>
+        <label for="rentals_max_utrecht_minutes">Max train ride to Utrecht Centraal (min)</label>
+        <input type="number" id="rentals_max_utrecht_minutes" name="rentals_max_utrecht_minutes" value="{{ config.nl_rentals.max_utrecht_minutes }}">
+      </div>
+    </div>
+    <p class="hint">Same criteria as NL Apartments, but rentals with a flat monthly price cap instead of the mortgage-budget table. Not emailed, just builds up at /rentals in the background.</p>
+    </div>
+
     <h2>Email &amp; people</h2>
     <div class="card">
     <div class="row">

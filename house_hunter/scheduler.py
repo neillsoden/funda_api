@@ -63,8 +63,31 @@ def _run_apartments_loop() -> None:
         time.sleep(seconds)
 
 
+def _run_rentals_loop() -> None:
+    """Same pattern as _run_apartments_loop() - see that docstring. Reads
+    nl_rentals.scan_interval_minutes."""
+    from house_hunter.rentals import scan_until_target
+    from house_hunter.state import record_run
+
+    while True:
+        try:
+            new_matches = scan_until_target()
+            record_run("rentals_scan", "ok", sent_count=new_matches, detail=f"{new_matches} new rental matches")
+            print(f"[rentals] scan complete, {new_matches} new matches")
+        except Exception:
+            print("[rentals] scan failed:")
+            traceback.print_exc()
+            record_run("rentals_scan", "error", detail=traceback.format_exc(limit=1))
+
+        minutes = load_config().get("nl_rentals", {}).get("scan_interval_minutes") or 360
+        seconds = max(60, int(minutes) * 60)
+        print(f"[rentals] sleeping {seconds}s until next scan")
+        time.sleep(seconds)
+
+
 def main() -> None:
     threading.Thread(target=_run_apartments_loop, daemon=True).start()
+    threading.Thread(target=_run_rentals_loop, daemon=True).start()
 
     first_run = True
     while True:

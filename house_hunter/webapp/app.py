@@ -23,6 +23,7 @@ load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 from funda import Funda, FundaError  # noqa: E402
 
 from house_hunter.apartments import scan_until_target  # noqa: E402
+from house_hunter.rentals import scan_until_target as rentals_scan_until_target  # noqa: E402
 from house_hunter.config import load_config, save_config  # noqa: E402
 from house_hunter.email_report import (  # noqa: E402
     _contrast_text_color,
@@ -43,15 +44,19 @@ from house_hunter.state import (  # noqa: E402
     condition_tags,
     favorited_by,
     get_apartment_filter_prefs,
+    get_rental_filter_prefs,
     nl_apartment_matches,
+    nl_rental_matches,
     record_click,
     recent_run_logs,
     rejected_listing_ids,
     remove_condition_tag,
     remove_favorite,
     remove_nl_apartment_match,
+    remove_nl_rental_match,
     remove_rejected,
     save_apartment_filter_prefs,
+    save_rental_filter_prefs,
     school_favorited_by,
     set_condition_tag,
     toggle_school_favorite,
@@ -177,6 +182,27 @@ def _run_apartments_scan() -> None:
     finally:
         _apartments_status["running"] = False
         _apartments_lock.release()
+
+
+# --- /rentals: same architecture as /apartments above (see its comment),
+# just category="rent" - matches build up via the scheduler's own 4x/day
+# rentals loop, this lock/status pair only guards the manual button.
+_rentals_lock = threading.Lock()
+_rentals_status: dict = {"running": False, "error": None}
+
+
+def _run_rentals_scan() -> None:
+    if not _rentals_lock.acquire(blocking=False):
+        return
+    _rentals_status["running"] = True
+    try:
+        rentals_scan_until_target()
+        _rentals_status["error"] = None
+    except Exception as exc:  # noqa: BLE001
+        _rentals_status["error"] = str(exc)
+    finally:
+        _rentals_status["running"] = False
+        _rentals_lock.release()
 
 
 def _card_view(item) -> dict:
@@ -389,9 +415,12 @@ def save():
     existing_mortgage_budget = load_config()["search"].get("mortgage_budget") or {}
 
     apartments_interval = read_int("apartments_scan_interval_minutes") or 360
+    rentals_interval = read_int("rentals_scan_interval_minutes") or 360
     valid_intervals = {minutes for minutes, _ in APARTMENTS_INTERVAL_OPTIONS}
     if apartments_interval not in valid_intervals:
         errors.append("Invalid NL Apartments scan interval")
+    if rentals_interval not in valid_intervals:
+        errors.append("Invalid NL Rentals scan interval")
 
     config = {
         "search": {
@@ -427,6 +456,15 @@ def save():
             "min_bedrooms": read_int("apartments_min_bedrooms"),
             "max_school_minutes": read_int("apartments_max_school_minutes"),
             "max_utrecht_minutes": read_int("apartments_max_utrecht_minutes"),
+        },
+        "nl_rentals": {
+            "scan_interval_minutes": rentals_interval,
+            "min_area": read_int("rentals_min_area"),
+            "max_area": read_int("rentals_max_area"),
+            "min_bedrooms": read_int("rentals_min_bedrooms"),
+            "max_price": read_int("rentals_max_price"),
+            "max_school_minutes": read_int("rentals_max_school_minutes"),
+            "max_utrecht_minutes": read_int("rentals_max_utrecht_minutes"),
         },
     }
 
@@ -757,6 +795,90 @@ def apartments_action(listing_id: str):
 def apartments_tag(listing_id: str):
     """Manual "how much work does this need" tag - toggles off if the same
     tag is clicked again, otherwise sets/overwrites it."""
+    tag = (request.get_json(silent=True) or {}).get("tag")
+    if tag not in ("needs_work", "move_in_ready"):
+        return jsonify({"ok": False, "error": "invalid tag"}), 400
+
+    current = condition_tags([listing_id]).get(listing_id)
+    if current == tag:
+        remove_condition_tag(listing_id)
+        return jsonify({"ok": True, "tag": None})
+
+    set_condition_tag(listing_id, tag)
+    return jsonify({"ok": True, "tag": tag})
+
+
+@app.route("/rentals", methods=["GET"])
+@login_required
+def rentals():
+    """Nationwide grid of rentals (~100 sqm, garden, 3+ bedrooms, within 15
+    min biking of any vrijeschool, max monthly price) - same architecture
+    as /apartments, see house_hunter/rentals.py and scheduler.py."""
+    cards = nl_rental_matches()
+    card_ids = [card["id"] for card in cards]
+    tags = condition_tags(card_ids)
+    viewed_ids = clicked_listing_ids(card_ids)
+    for card in cards:
+        card["condition_tag"] = tags.get(card["id"])
+        card["viewed"] = card["id"] in viewed_ids
+        card["tracked_url"] = f"/click/{card['id']}?to={quote(card['url'], safe='')}"
+        card["energy_rank"] = (
+            _ENERGY_LABEL_ORDER.index(card["energy_label"])
+            if card["energy_label"] in _ENERGY_LABEL_ORDER
+            else len(_ENERGY_LABEL_ORDER)
+        )
+        card["nearest_school_minutes"] = card["schools"][0]["minutes"] if card["schools"] else 999
+
+    tag_filter, viewed_filter = get_rental_filter_prefs(session["user"])
+
+    return render_template(
+        "nl_rentals.html",
+        cards=cards,
+        running=_rentals_status["running"],
+        error=_rentals_status["error"],
+        initial_tag_filter=tag_filter,
+        initial_viewed_filter=viewed_filter,
+    )
+
+
+@app.route("/rentals/filter-prefs", methods=["POST"])
+@login_required
+def rentals_filter_prefs():
+    data = request.get_json(silent=True) or {}
+    tag_filter = data.get("tag_filter", "all")
+    viewed_filter = data.get("viewed_filter", "all")
+    save_rental_filter_prefs(session["user"], tag_filter, viewed_filter)
+    return jsonify({"ok": True})
+
+
+@app.route("/rentals/refresh", methods=["POST"])
+@login_required
+def rentals_refresh():
+    if not _rentals_status["running"]:
+        threading.Thread(target=_run_rentals_scan, daemon=True).start()
+    return redirect(url_for("rentals"))
+
+
+@app.route("/rentals/action/<listing_id>", methods=["POST"])
+@login_required
+def rentals_action(listing_id: str):
+    direction = (request.get_json(silent=True) or {}).get("direction")
+    if direction not in ("left", "right"):
+        return jsonify({"ok": False, "error": "invalid direction"}), 400
+
+    if direction == "right":
+        add_favorite(listing_id, session["user"].capitalize())
+    else:
+        add_rejected(listing_id)
+
+    remove_nl_rental_match(listing_id)
+    remove_condition_tag(listing_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/rentals/tag/<listing_id>", methods=["POST"])
+@login_required
+def rentals_tag(listing_id: str):
     tag = (request.get_json(silent=True) or {}).get("tag")
     if tag not in ("needs_work", "move_in_ready"):
         return jsonify({"ok": False, "error": "invalid tag"}), 400

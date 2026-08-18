@@ -103,6 +103,17 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_school_minutes": 15,
         "max_utrecht_minutes": 80,
     },
+    "nl_rentals": {
+        # Same shape/logic as nl_apartments above, but category="rent" with
+        # a flat monthly price cap instead of a mortgage-budget table.
+        "scan_interval_minutes": 360,
+        "min_area": 90,
+        "max_area": 110,
+        "min_bedrooms": 3,
+        "max_price": 2000,
+        "max_school_minutes": 15,
+        "max_utrecht_minutes": 80,
+    },
 }
 
 

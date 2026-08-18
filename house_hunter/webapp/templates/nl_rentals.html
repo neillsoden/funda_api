@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+{% block title %}NL Rentals — House Hunter{% endblock %}
+{% block head %}
+<style>
+  .wrap { max-width: 1080px; }
+  h1 { display: none; }
+
+  .header-card, .filters-card {
+    background: #fff; border: 1px solid var(--gray-200); border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(23,22,26,0.03);
+  }
+  .header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .page-title { font-weight: 800; font-size: 1.05rem; color: var(--ink); letter-spacing: -0.01em; }
+  .header-top .status { font-size: 0.7rem; color: var(--gray-500); margin-top: 3px; }
+  .header-top button { margin: 0; height: 30px; padding: 0 14px; font-size: 0.7rem; line-height: normal;
+    box-shadow: none; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .criteria { font-size: 0.66rem; color: var(--gray-500); line-height: 1.6; margin: 10px 0 0 0;
+    padding-top: 10px; border-top: 1px solid var(--gray-100); }
+
+  .filters-card { display: flex; flex-direction: column; gap: 8px; }
+  .filter-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .filter-label { font-size: 0.64rem; font-weight: 800; color: var(--gray-500); text-transform: uppercase;
+    letter-spacing: 0.04em; min-width: 58px; flex-shrink: 0; }
+  #sort-select { width: auto; height: 30px; font-size: 0.72rem; padding: 0 28px 0 10px; border-radius: 8px; }
+
+  .apt-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  @media (max-width: 900px) { .apt-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 680px) { .apt-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
+  @media (max-width: 420px) { .apt-grid { grid-template-columns: 1fr; } }
+
+  .apt-card {
+    display: flex; flex-direction: column; height: 100%;
+    border-radius: 14px; overflow: hidden; background: var(--gray-100);
+    box-shadow: 0 1px 3px rgba(23,22,26,0.14); transition: opacity .25s ease, transform .25s ease;
+  }
+  .apt-card .photo-wrap { position: relative; height: 150px; }
+  .apt-card img.photo { width: 100%; height: 150px; object-fit: cover; display: block; }
+  .apt-card .scrim {
+    position: absolute; left: 0; right: 0; top: 0; height: 100%;
+    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 55%);
+  }
+  .apt-card .badge-fav { position: absolute; top: 8px; right: 8px; background: #fbbc04; color: #202124;
+    font-size: 9px; font-weight: 800; padding: 3px 7px; border-radius: 5px; }
+  .apt-card .badge-new { position: absolute; top: 8px; left: 8px; background: #1967d2; color: #fff;
+    font-size: 9px; font-weight: 800; letter-spacing: 0.02em; padding: 3px 7px; border-radius: 5px; }
+  .apt-card .badge-viewed { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.55);
+    color: #fff; font-size: 9px; font-weight: 700; padding: 3px 7px; border-radius: 5px;
+    display: flex; align-items: center; gap: 3px; }
+  .apt-card .badge-viewed svg { width: 10px; height: 10px; }
+  .apt-card .photo-text { position: absolute; left: 10px; right: 10px; bottom: 8px; color: #fff; }
+  .apt-card .addr { font-size: 0.62rem; color: rgba(255,255,255,0.85); text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+  .apt-card .title { font-weight: 800; font-size: 0.8rem; text-shadow: 0 1px 4px rgba(0,0,0,0.6); line-height: 1.25; }
+
+  .apt-card .body { display: flex; flex-direction: column; flex: 1; padding: 10px; }
+  .apt-card .price { font-size: 0.92rem; font-weight: 800; }
+  .apt-card .budget-text { font-size: 0.6rem; font-weight: 700; margin-top: 1px; }
+
+  .facts-row { display: flex; align-items: center; gap: 8px; margin-top: 7px; font-size: 0.66rem;
+    font-weight: 600; color: var(--gray-600); }
+  .facts-row .fact { display: inline-flex; align-items: center; gap: 3px; }
+  .facts-row .fact svg { width: 11px; height: 11px; flex-shrink: 0; }
+  .facts-row .fact.garden { color: #146c2e; }
+  .energy-dot { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
+    border-radius: 50%; font-size: 0.52rem; font-weight: 800; margin-left: auto; }
+
+  .schools-block { margin-top: 7px; padding: 6px 8px; background: #e6f4ea; border-radius: 8px; }
+  .schools-block a, .schools-block span.school-line { display: flex; align-items: center; gap: 4px;
+    font-size: 0.62rem; font-weight: 700; color: #146c2e; text-decoration: none; padding: 1px 0; }
+  .schools-block svg { width: 10px; height: 10px; flex-shrink: 0; }
+
+  .meta-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 6px; }
+  .pill { display: inline-flex; align-items: center; gap: 3px; background: var(--gray-100); color: var(--gray-600);
+    font-size: 0.6rem; font-weight: 700; padding: 3px 7px; border-radius: 8px; text-decoration: none; }
+  .pill svg { width: 10px; height: 10px; flex-shrink: 0; }
+  .pill.ok { background: #e6f4ea; color: #146c2e; }
+
+  .apt-actions { display: flex; gap: 5px; margin-top: auto; padding-top: 8px; }
+  .apt-actions button, .apt-actions a {
+    margin: 0; flex: 1; height: 32px; border-radius: 9px; padding: 0; font-size: 0.62rem;
+    font-weight: 700; line-height: normal; box-shadow: none; border: 1.5px solid var(--gray-200);
+    background: #fff; color: var(--gray-600); cursor: pointer; text-decoration: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .apt-actions svg { width: 16px; height: 16px; flex-shrink: 0; pointer-events: none; }
+  .apt-actions .tag-needs_work.active { background: #fce8e6; color: #c5221f; border-color: #f6c6c1; }
+  .apt-actions .tag-move_in_ready.active { background: #e6f4ea; color: #146c2e; border-color: #b7dfc0; }
+  .apt-actions .btn-nope { color: var(--red); border-color: #f6c6c1; }
+  .apt-actions .btn-nope:hover { background: var(--red-tint); }
+  .apt-actions .btn-like { color: #1e8e3e; border-color: #b7dfc0; }
+  .apt-actions .btn-like:hover { background: #e6f4ea; }
+
+  .filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-row button { margin: 0; height: 26px; padding: 0 12px; font-size: 0.68rem; font-weight: 700;
+    line-height: normal; box-shadow: none; border-radius: 999px; border: 1.5px solid var(--gray-200);
+    background: #fff; color: var(--gray-600); cursor: pointer; display: inline-flex; align-items: center; }
+  .filter-row button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  .apt-card.filtered-out { display: none; }
+
+  .empty-state { text-align: center; color: var(--gray-500); padding: 40px 20px; font-size: 0.8rem; }
+</style>
+{% if running %}<meta http-equiv="refresh" content="6">{% endif %}
+{% endblock %}
+{% block content %}
+  {% macro icon(path, size=10) %}<svg viewBox="0 0 24 24" width="{{ size }}" height="{{ size }}" fill="currentColor"><path d="{{ path }}"/></svg>{% endmacro %}
+  {% set ICON_ROOMS = "M3 3h18v18H3V3zm2 2v14h14V5H5zm2 2h4v4H7V7zm6 0h4v4h-4V7zM7 13h4v4H7v-4zm6 0h4v4h-4v-4z" %}
+  {% set ICON_AREA = "M9 3v2H5v4H3V3h6zm12 0v6h-2V5h-4V3h6zM3 15v6h6v-2H5v-4H3zm18 0h-2v4h-4v2h6v-6z" %}
+  {% set ICON_GARDEN = "M12 2C8 6 5 9.5 5 13a7 7 0 0 0 14 0c0-3.5-3-7-7-11zm0 17a5 5 0 0 1-5-5c0-.34.03-.67.09-1H11v6h1v-6h3.91c.06.33.09.66.09 1a5 5 0 0 1-5 5z" %}
+  {% set ICON_BIKE = "M15.5 5.5c1.11 0 2-.89 2-2s-.89-2-2-2-2 .89-2 2 .89 2 2 2zM5 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.93 0-3.5-1.57-3.5-3.5S3.07 13.5 5 13.5s3.5 1.57 3.5 3.5S6.93 20.5 5 20.5zm5.8-10l2.4-2.4.8.8c1.3 1.3 3 2.1 5.1 2.1V9c-1.5 0-2.7-.6-3.6-1.5l-1.9-1.9c-.5-.4-1-.6-1.6-.6s-1.1.2-1.4.6L7.8 8.4c-.4.4-.6.9-.6 1.4 0 .6.2 1.1.6 1.4L11 14v5h2v-6.2l-2.2-2.3zM19 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z" %}
+  {% set ICON_OPEN = "M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zm-9 2c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-7h-2v7H5V7h7V5H5z" %}
+  {% set ICON_TRAIN = "M12 2c-4 0-8 .5-8 4v9.5A3.5 3.5 0 0 0 7.5 19L6 20.5V21h12v-.5L16.5 19A3.5 3.5 0 0 0 20 15.5V6c0-3.5-4-4-8-4zM7.5 17A1.5 1.5 0 1 1 9 15.5 1.5 1.5 0 0 1 7.5 17zm9 0a1.5 1.5 0 1 1 1.5-1.5 1.5 1.5 0 0 1-1.5 1.5zM18 10H6V6h12z" %}
+  {% set ICON_NOPE = "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" %}
+  {% set ICON_LIKE = "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" %}
+  {% set ICON_TOOL = "M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z" %}
+  {% set ICON_SCHEDULE = "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" %}
+  {% set ICON_CHECK = "M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" %}
+
+  <div class="header-card">
+    <div class="header-top">
+      <div>
+        <div class="page-title">NL Rentals</div>
+        <div class="status">
+          {{ cards|length }} found{% if running %} · scanning now (paced, to go easy on Funda)…{% endif %}
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('rentals_refresh') }}">
+        <button type="submit" class="btn-secondary" {% if running %}disabled{% endif %}>{{ 'Scanning…' if running else 'Scan more now' }}</button>
+      </form>
+    </div>
+    <p class="criteria">Up to €2,000/month · ~100 m² · garden · 3+ bedrooms · ≤15 min biking to any vrijeschool · ≤1h20 train ride to Utrecht Centraal (ride time only, not getting to the station). Experimental — scans automatically 4x a day, no cap on how many accumulate.</p>
+  </div>
+
+  {% if error %}<div class="errors">{{ error }}</div>{% endif %}
+
+  {% if not cards %}
+    <div class="card"><p class="hint" style="margin:0;">No matches found yet — the scheduler checks 4 times a day, or hit "Scan more now" above.</p></div>
+  {% else %}
+    <div class="filters-card">
+      <div class="filter-group">
+        <span class="filter-label">Condition</span>
+        <div class="filter-row" id="filter-row-tag">
+          <button type="button" class="{{ 'active' if initial_tag_filter == 'all' }}" data-filter="all" onclick="setTagFilter('all')">All</button>
+          <button type="button" class="{{ 'active' if initial_tag_filter == 'needs_work' }}" data-filter="needs_work" onclick="setTagFilter('needs_work')">Needs work</button>
+          <button type="button" class="{{ 'active' if initial_tag_filter == 'move_in_ready' }}" data-filter="move_in_ready" onclick="setTagFilter('move_in_ready')">Move-in ready</button>
+          <button type="button" class="{{ 'active' if initial_tag_filter == 'untagged' }}" data-filter="untagged" onclick="setTagFilter('untagged')">Untagged</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Viewed</span>
+        <div class="filter-row" id="filter-row-viewed">
+          <button type="button" class="{{ 'active' if initial_viewed_filter == 'all' }}" data-filter="all" onclick="setViewedFilter('all')">All</button>
+          <button type="button" class="{{ 'active' if initial_viewed_filter == 'viewed' }}" data-filter="viewed" onclick="setViewedFilter('viewed')">Viewed</button>
+          <button type="button" class="{{ 'active' if initial_viewed_filter == 'not_viewed' }}" data-filter="not_viewed" onclick="setViewedFilter('not_viewed')">Not viewed</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Sort</span>
+        <select id="sort-select" onchange="setSort(this.value)">
+          <option value="default">Newest found first</option>
+          <option value="bedrooms">Bedrooms (most first)</option>
+          <option value="energy">Energy rating (best first)</option>
+          <option value="school">Distance to school (closest first)</option>
+          <option value="city">City (A-Z)</option>
+        </select>
+      </div>
+    </div>
+    <div class="apt-grid" id="apt-grid">
+      {% for c in cards %}
+        <div class="apt-card" data-id="{{ c.id }}" data-tag="{{ c.condition_tag or '' }}" data-viewed="{{ '1' if c.viewed else '0' }}"
+             data-bedrooms="{{ c.bedrooms or 0 }}" data-energy-rank="{{ c.energy_rank }}"
+             data-school-minutes="{{ c.nearest_school_minutes }}" data-city="{{ (c.city or '')|lower }}"
+             style="order: {{ loop.index0 }};">
+          <div class="photo-wrap">
+            <img class="photo" src="{{ c.photo }}">
+            <div class="scrim"></div>
+            {% if c.new_badge %}<div class="badge-new">{{ c.new_badge }}</div>{% endif %}
+            {% if c.favorited_by %}<div class="badge-fav">&#9733; {{ c.favorited_by|join(', ') }}</div>{% endif %}
+            {% if c.viewed %}<div class="badge-viewed">{{ icon(ICON_CHECK, 10) }}Viewed</div>{% endif %}
+            <div class="photo-text">
+              <div class="addr">{{ c.neighbourhood + ', ' if c.neighbourhood }}{{ c.city }}</div>
+              <div class="title">{{ c.title }}</div>
+            </div>
+          </div>
+          <div class="body">
+            <div class="price" style="color:{{ c.price_color or 'var(--ink)' }};">{{ c.price }}</div>
+            {% if c.budget_total_text %}<div class="budget-text" style="color:{{ c.price_color }};">{{ c.budget_total_text }}</div>{% endif %}
+            <div class="facts-row">
+              <span class="fact" title="{{ c.bedrooms }} bedrooms">{{ icon(ICON_ROOMS) }}{{ c.bedrooms }}</span>
+              {% if c.living_area %}<span class="fact" title="{{ c.living_area }} m² living">{{ icon(ICON_AREA) }}{{ c.living_area }} m²</span>{% endif %}
+              <span class="fact garden" title="Has a garden">{{ icon(ICON_GARDEN) }}Garden</span>
+              <span class="energy-dot" style="background:{{ c.energy_bg }};color:{{ c.energy_text }};" title="Energy label {{ c.energy_label }}">{{ c.energy_label }}</span>
+            </div>
+            {% if c.schools %}
+              <div class="schools-block">
+                {% for s in c.schools %}
+                  {% if s.maps_url %}<a href="{{ s.maps_url }}" target="_blank" rel="noopener" title="{{ s.km }} km - view route">{{ icon(ICON_BIKE) }}{{ s.minutes }} min · {{ s.name }}</a>
+                  {% else %}<span class="school-line" title="{{ s.km }} km">{{ icon(ICON_BIKE) }}{{ s.minutes }} min · {{ s.name }}</span>{% endif %}
+                {% endfor %}
+              </div>
+            {% endif %}
+            <div class="meta-row">
+              {% if c.utrecht_minutes is not none %}
+                {% if c.utrecht_maps_url %}<a class="pill ok" href="{{ c.utrecht_maps_url }}" target="_blank" rel="noopener" title="{{ c.utrecht_minutes }} min train ride to Utrecht Centraal (not counting getting to the station) - view route">{{ icon(ICON_TRAIN) }}{{ c.utrecht_minutes }} min to Utrecht</a>
+                {% else %}<span class="pill ok" title="{{ c.utrecht_minutes }} min train ride to Utrecht Centraal (not counting getting to the station)">{{ icon(ICON_TRAIN) }}{{ c.utrecht_minutes }} min to Utrecht</span>{% endif %}
+              {% endif %}
+              {% if c.listed_short %}<span class="pill" title="{{ c.listed_title }}">{{ icon(ICON_SCHEDULE) }}{{ c.listed_short }}</span>{% endif %}
+            </div>
+            <div class="apt-actions">
+              <button type="button" class="tag-needs_work {{ 'active' if c.condition_tag == 'needs_work' }}" onclick="tagCard('{{ c.id }}', 'needs_work', this)" title="Needs work" aria-label="Needs work">{{ icon(ICON_TOOL) }}</button>
+              <button type="button" class="tag-move_in_ready {{ 'active' if c.condition_tag == 'move_in_ready' }}" onclick="tagCard('{{ c.id }}', 'move_in_ready', this)" title="Move-in ready" aria-label="Move-in ready">{{ icon(ICON_CHECK) }}</button>
+              <button type="button" class="btn-nope" onclick="rentalAction('{{ c.id }}', 'left', this)" title="Not interested" aria-label="Not interested">{{ icon(ICON_NOPE) }}</button>
+              <a href="{{ c.tracked_url }}" target="_blank" rel="noopener" title="View on Funda" aria-label="View on Funda">{{ icon(ICON_OPEN) }}</a>
+              <button type="button" class="btn-like" onclick="rentalAction('{{ c.id }}', 'right', this)" title="Favorite" aria-label="Favorite">{{ icon(ICON_LIKE) }}</button>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <script>
+    function rentalAction(listingId, direction, button) {
+      fetch(`/rentals/action/${listingId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction }),
+      });
+      const card = button.closest('.apt-card');
+      card.style.opacity = '0';
+      card.style.transform = 'scale(0.92)';
+      setTimeout(() => {
+        card.remove();
+        const grid = document.getElementById('apt-grid');
+        if (grid && !grid.querySelector('.apt-card')) {
+          grid.outerHTML = '<div class="empty-state">No more rentals right now.</div>';
+        }
+      }, 250);
+    }
+
+    function tagCard(listingId, tag, button) {
+      fetch(`/rentals/tag/${listingId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data.ok) return;
+          const card = button.closest('.apt-card');
+          card.querySelectorAll('.tag-needs_work, .tag-move_in_ready').forEach((btn) => btn.classList.remove('active'));
+          if (data.tag) {
+            button.classList.add('active');
+            card.dataset.tag = data.tag;
+          } else {
+            card.dataset.tag = '';
+          }
+          applyFilter();
+        });
+    }
+
+    let tagFilter = {{ (initial_tag_filter or 'all')|tojson }};
+    let viewedFilter = {{ (initial_viewed_filter or 'all')|tojson }};
+
+    function saveFilterPrefs() {
+      fetch('/rentals/filter-prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag_filter: tagFilter, viewed_filter: viewedFilter }),
+      });
+    }
+    function setTagFilter(filter) {
+      tagFilter = filter;
+      document.querySelectorAll('#filter-row-tag button').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+      });
+      applyFilter();
+      saveFilterPrefs();
+    }
+    function setViewedFilter(filter) {
+      viewedFilter = filter;
+      document.querySelectorAll('#filter-row-viewed button').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+      });
+      applyFilter();
+      saveFilterPrefs();
+    }
+    function applyFilter() {
+      document.querySelectorAll('.apt-card').forEach((card) => {
+        const tag = card.dataset.tag || '';
+        const tagOk =
+          tagFilter === 'all' ||
+          (tagFilter === 'untagged' && !tag) ||
+          tagFilter === tag;
+        const viewed = card.dataset.viewed === '1';
+        const viewedOk =
+          viewedFilter === 'all' ||
+          (viewedFilter === 'viewed' && viewed) ||
+          (viewedFilter === 'not_viewed' && !viewed);
+        card.classList.toggle('filtered-out', !(tagOk && viewedOk));
+      });
+    }
+
+    function setSort(mode) {
+      const cards = Array.from(document.querySelectorAll('.apt-card'));
+      const originalOrder = new Map(cards.map((card, i) => [card, i]));
+      const sortKey = {
+        default: (card) => originalOrder.get(card),
+        bedrooms: (card) => -Number(card.dataset.bedrooms),
+        energy: (card) => Number(card.dataset.energyRank),
+        school: (card) => Number(card.dataset.schoolMinutes),
+        city: (card) => card.dataset.city,
+      }[mode];
+      cards
+        .sort((a, b) => {
+          const ka = sortKey(a), kb = sortKey(b);
+          return ka < kb ? -1 : ka > kb ? 1 : 0;
+        })
+        .forEach((card, i) => { card.style.order = i; });
+    }
+
+    applyFilter();
+  </script>
+{% endblock %}
