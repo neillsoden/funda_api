@@ -2,6 +2,8 @@
 
 from funda import Funda, Listing
 
+from house_hunter.funda_retry import with_retry
+
 
 def budget_for_label(mortgage_budget: dict[str, int], energy_label: str | None) -> int | None:
     """Max mortgage capacity for a given energy label. Unknown/unlisted labels
@@ -72,7 +74,10 @@ def find_matching_listings(client: Funda, config: dict) -> list[Listing]:
         # iter_search walks every page until exhausted - plain search() only
         # returns the first page (15 results), silently missing anything
         # beyond that when a location/filter combo matches more than 15.
-        results = client.iter_search(location, **kwargs)
+        # with_retry: Funda's backend occasionally rejects a query with a
+        # transient embedded 401 ("no token provided") that pyfunda doesn't
+        # retry on its own - see house_hunter/funda_retry.py.
+        results = with_retry(lambda loc=location: list(client.iter_search(loc, **kwargs)))
         ids.extend(listing.id for listing in results if listing.id)
 
     unique_ids = list(dict.fromkeys(ids))

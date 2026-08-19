@@ -21,6 +21,7 @@ from house_hunter.email_report import (
     _maps_directions_url,
     _price_budget_color,
 )
+from house_hunter.funda_retry import with_retry
 from house_hunter.poi import distance_to, transit_ride_minutes
 from house_hunter.search import _is_actually_available, budget_for_label, is_under_bid
 from house_hunter.state import (
@@ -148,21 +149,27 @@ def scan_batch(*, batch_pages: int = 1) -> int:
     start_page = get_nl_apartments_scan_cursor()
 
     with Funda() as client:
-        candidate_ids: list[str] = []
-        pages_fetched = 0
-        for listing in client.iter_search(
-            None,
-            category="buy",
-            object_type="apartment",
-            min_area=min_area,
-            max_area=max_area,
-            min_bedrooms=min_bedrooms,
-            max_price=price_ceiling,
-            start_page=start_page,
-            max_pages=batch_pages,
-        ):
-            if listing.id:
-                candidate_ids.append(listing.id)
+        def _collect() -> list[str]:
+            ids = []
+            for listing in client.iter_search(
+                None,
+                category="buy",
+                object_type="apartment",
+                min_area=min_area,
+                max_area=max_area,
+                min_bedrooms=min_bedrooms,
+                max_price=price_ceiling,
+                start_page=start_page,
+                max_pages=batch_pages,
+            ):
+                if listing.id:
+                    ids.append(listing.id)
+            return ids
+
+        # Funda's backend occasionally rejects a query with a transient
+        # embedded 401 ("no token provided") that pyfunda doesn't retry on
+        # its own - see house_hunter/funda_retry.py.
+        candidate_ids = with_retry(_collect)
 
         # Exhausted all pages for this filter - wrap back to the start so
         # newly listed apartments eventually get picked up too.

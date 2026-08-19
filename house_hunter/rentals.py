@@ -13,6 +13,7 @@ from funda import Funda
 from house_hunter.apartments import UTRECHT_CENTRAAL, _nearby_schools, _utrecht_maps_url
 from house_hunter.config import load_config
 from house_hunter.email_report import _contrast_text_color, _days_listed, _energy_color, _price_budget_color
+from house_hunter.funda_retry import with_retry
 from house_hunter.poi import transit_ride_minutes
 from house_hunter.search import _is_actually_available, is_under_bid
 from house_hunter.state import (
@@ -78,20 +79,27 @@ def scan_batch(*, batch_pages: int = 1) -> int:
     start_page = get_nl_rentals_scan_cursor()
 
     with Funda() as client:
-        candidate_ids: list[str] = []
-        for listing in client.iter_search(
-            None,
-            category="rent",
-            object_type="apartment",
-            min_area=min_area,
-            max_area=max_area,
-            min_bedrooms=min_bedrooms,
-            max_price=max_price,
-            start_page=start_page,
-            max_pages=batch_pages,
-        ):
-            if listing.id:
-                candidate_ids.append(listing.id)
+        def _collect() -> list[str]:
+            ids = []
+            for listing in client.iter_search(
+                None,
+                category="rent",
+                object_type="apartment",
+                min_area=min_area,
+                max_area=max_area,
+                min_bedrooms=min_bedrooms,
+                max_price=max_price,
+                start_page=start_page,
+                max_pages=batch_pages,
+            ):
+                if listing.id:
+                    ids.append(listing.id)
+            return ids
+
+        # Funda's backend occasionally rejects a query with a transient
+        # embedded 401 ("no token provided") that pyfunda doesn't retry on
+        # its own - see house_hunter/funda_retry.py.
+        candidate_ids = with_retry(_collect)
 
         pages_fetched = math.ceil(len(candidate_ids) / PAGE_SIZE) if candidate_ids else batch_pages
         next_page = start_page + pages_fetched
